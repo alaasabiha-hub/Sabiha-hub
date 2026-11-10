@@ -2,91 +2,204 @@ import streamlit as st
 import pandas as pd
 import json
 import os
-import datetime
+import datetime as dt
+import uuid
+import html
+from copy import deepcopy
 
-# ضبط إعدادات الصفحة لتكون عريضة ومناسبة لجميع الشاشات
-st.set_page_config(page_title="Sabiha Hub", page_icon="✨", layout="wide", initial_sidebar_state="expanded")
+# =============================================================================
+# Sabiha Hub - Streamlit application
+# =============================================================================
+st.set_page_config(
+    page_title="Sabiha Hub",
+    page_icon="✨",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# واجهة موحدة أكثر احترافية ومتوافقة مع الشاشات المختلفة.
+DATA_FILE = "sabiha_persistent_data.json"
+APP_TITLE = "Sabiha Hub"
+
+# Theme: light main area + dark navy sidebar, with explicit widget colors.
 st.markdown("""
 <style>
-:root { --sh-primary:#173b63; --sh-accent:#18a58a; --sh-bg:#f4f7fb; }
-.stApp { background:var(--sh-bg); }
-.block-container { padding-top:1.5rem; padding-bottom:2.5rem; max-width:1500px; }
-[data-testid="stSidebar"] { background:linear-gradient(180deg,#102b49 0%,#173b63 100%); }
-[data-testid="stSidebar"] * { color:#f7fbff !important; }
-[data-testid="stMetric"] { background:#ffffff; border:1px solid #e7edf4; padding:16px 18px; border-radius:16px; box-shadow:0 4px 16px rgba(20,48,78,.06); }
-[data-testid="stMetricLabel"] p { color:#52657a !important; font-weight:600; }
-[data-testid="stMetricValue"] { color:#173b63 !important; font-weight:800; }
-.stButton > button, .stDownloadButton > button { border-radius:10px; min-height:2.6rem; font-weight:650; }
-.stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] { border-radius:10px; }
-[data-testid="stExpander"] { border:1px solid #e4ebf2; border-radius:12px; background:#fff; }
-hr { border-color:#e3eaf2; }
-.sh-hero { background:linear-gradient(115deg,#123456,#1b6b78); padding:24px 28px; border-radius:18px; color:white; margin:0 0 18px 0; box-shadow:0 8px 24px rgba(18,52,86,.16); }
-.sh-hero h1 { color:white; margin:0; font-size:1.8rem; }
-.sh-hero p { color:#e1f2f4; margin:.4rem 0 0 0; }
-@media(max-width:700px){ .block-container{padding:1rem .8rem 2rem;} .sh-hero{padding:18px;} }
+:root {
+    --sh-primary: #173b63;
+    --sh-accent: #18a58a;
+    --sh-bg: #f4f7fb;
+    --sh-text: #17324d;
+    --sh-muted: #52657a;
+}
+.stApp, [data-testid="stAppViewContainer"] {
+    background: var(--sh-bg) !important;
+    color: var(--sh-text) !important;
+}
+[data-testid="stMain"] {
+    color: var(--sh-text) !important;
+}
+.block-container {
+    padding-top: 1.35rem;
+    padding-bottom: 2.5rem;
+    max-width: 1500px;
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #102b49 0%, #173b63 100%) !important;
+}
+[data-testid="stSidebar"] * {
+    color: #f7fbff !important;
+}
+[data-testid="stMarkdownContainer"],
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4,
+[data-testid="stMain"] label,
+[data-testid="stMain"] .stCaption {
+    color: var(--sh-text) !important;
+}
+[data-testid="stMetric"] {
+    background: #fff !important;
+    border: 1px solid #e4ebf2;
+    padding: 15px 17px;
+    border-radius: 15px;
+    box-shadow: 0 4px 16px rgba(20,48,78,.05);
+}
+[data-testid="stMetricLabel"] p {
+    color: var(--sh-muted) !important;
+    font-weight: 650;
+}
+[data-testid="stMetricValue"] {
+    color: var(--sh-primary) !important;
+    font-weight: 800;
+}
+.stButton > button, .stDownloadButton > button {
+    border-radius: 10px;
+    min-height: 2.55rem;
+    font-weight: 650;
+    border: 1px solid #d5e0eb;
+}
+.stButton > button[kind="primary"] {
+    background: var(--sh-primary) !important;
+    color: #fff !important;
+}
+.stTextInput input, .stNumberInput input, .stDateInput input,
+.stTextArea textarea, textarea {
+    background: #fff !important;
+    color: var(--sh-text) !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 9px !important;
+}
+[data-baseweb="select"] > div {
+    background: #fff !important;
+    color: var(--sh-text) !important;
+    border-color: #cbd5e1 !important;
+}
+[data-baseweb="select"] *, [data-baseweb="popover"] * {
+    color: var(--sh-text) !important;
+}
+[data-testid="stExpander"] {
+    border: 1px solid #e4ebf2;
+    border-radius: 12px;
+    background: #fff;
+}
+[data-testid="stDataFrame"], [data-testid="stTable"] {
+    background: #fff;
+}
+.sh-hero {
+    background: linear-gradient(115deg, #123456, #1b6b78);
+    padding: 23px 27px;
+    border-radius: 17px;
+    color: white;
+    margin-bottom: 18px;
+    box-shadow: 0 8px 24px rgba(18,52,86,.14);
+}
+.sh-hero h1 { color: white !important; margin: 0; font-size: 1.8rem; }
+.sh-hero p { color: #e1f2f4 !important; margin: .4rem 0 0 0; }
+@media (max-width: 700px) {
+    .block-container { padding: 1rem .8rem 2rem; }
+    .sh-hero { padding: 17px; }
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================================
-# 1. نظام الحفظ والتخزين السحابي الدائم لمنع ضياع الحسابات والبيانات أونلاين
-# ============================================================================
-DATA_FILE = "sabiha_persistent_data.json"
 
-def load_system_data():
-    """تحميل البيانات المخزنة من الملف السحابي إذا كانت موجودة، وإلا إنشاء البيانات الافتراضية"""
-    default_data = {
+# =============================================================================
+# Data model, migration and safe local-file persistence
+# =============================================================================
+def default_data():
+    return {
         "credentials": {
             "owner": {"username": "owner", "password": "sabiha2026"},
             "workers_accounts": {
                 "worker1": {
-                    "name": "كاشير الاستقبال", 
-                    "password": "pos123", 
+                    "name": "كاشير الاستقبال",
+                    "password": "pos123",
                     "role": "worker",
-                    "permissions": ["🛒 كاشير الاستقبال POS", "📑... دفتر المصروفات"]
+                    "permissions": ["🛒 كاشير الاستقبال POS", "📑 دفتر المصروفات"],
                 }
-            }
+            },
         },
         "workers": [
             {"name": "أحمد مصطفى", "advance": 0.0},
-            {"name": "محمد علي", "advance": 0.0}
+            {"name": "محمد علي", "advance": 0.0},
         ],
-        # نسبة عمولة الخدمات من صافي الفاتورة بعد الخصم
         "commission_rate": 10.0,
         "services": {
             "غسيل سريع": {"الملكي": 150.0, "SUV": 200.0, "fixed_commission": 20.0},
             "تلميع نانو سريع": {"الملكي": 300.0, "SUV": 400.0, "fixed_commission": 50.0},
-            "تنظيف صالون عميق": {"الملكي": 250.0, "SUV": 350.0, "fixed_commission": 40.0}
+            "تنظيف صالون عميق": {"الملكي": 250.0, "SUV": 350.0, "fixed_commission": 40.0},
         },
         "products": {
             "معطر سيارة فاخر": 30.0,
             "فوطة مايكرو فايبر": 50.0,
-            "سائل ممسحة زجاج": 40.0
+            "سائل ممسحة زجاج": 40.0,
         },
         "session_state_invoices": {},
         "daily_sales": 0.0,
         "daily_expenses": {"rent": 0.0, "operational": 0.0, "utilities": 0.0},
         "daily_archive": {},
-        "monthly_archive": {}
+        "monthly_archive": {},
     }
-    
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                # التأكد من دمج بنية البيانات لضمان عدم حدوث تعارض
-                for key, val in default_data.items():
-                    if key not in loaded:
-                        loaded[key] = val
-                return loaded
-        except:
-            return default_data
-    return default_data
+
+
+def deep_merge(defaults, saved):
+    """Keep saved values while adding any newly introduced default keys."""
+    if isinstance(defaults, dict) and isinstance(saved, dict):
+        merged = deepcopy(defaults)
+        for key, value in saved.items():
+            if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+                merged[key] = deep_merge(merged[key], value)
+            else:
+                merged[key] = value
+        return merged
+    return saved if saved is not None else deepcopy(defaults)
+
+
+def load_system_data():
+    defaults = default_data()
+    if not os.path.exists(DATA_FILE):
+        return defaults
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as file:
+            saved = json.load(file)
+        data = deep_merge(defaults, saved)
+        # Normalize fields that older versions may not have contained.
+        data.setdefault("credentials", defaults["credentials"])
+        data["credentials"].setdefault("owner", defaults["credentials"]["owner"])
+        data["credentials"].setdefault("workers_accounts", {})
+        data.setdefault("workers", [])
+        data.setdefault("session_state_invoices", {})
+        data.setdefault("daily_expenses", defaults["daily_expenses"])
+        return data
+    except (OSError, json.JSONDecodeError, TypeError):
+        st.error("تعذر قراءة ملف البيانات الحالي. لم يتم استبداله حتى لا نفقد البيانات.")
+        return defaults
+
 
 def save_system_data():
-    """حفظ الحالة الحالية للنظام بالكامل في الملف النصي بشكل فوري لضمان الثبات"""
-    to_save = {
+    payload = {
         "credentials": st.session_state.credentials,
         "workers": st.session_state.workers,
         "commission_rate": st.session_state.commission_rate,
@@ -96,85 +209,85 @@ def save_system_data():
         "daily_sales": st.session_state.daily_sales,
         "daily_expenses": st.session_state.daily_expenses,
         "daily_archive": st.session_state.daily_archive,
-        "monthly_archive": st.session_state.monthly_archive
+        "monthly_archive": st.session_state.monthly_archive,
     }
+    temp_file = DATA_FILE + ".tmp"
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(to_save, f, ensure_ascii=False, indent=4)
-    except:
-        pass
+        with open(temp_file, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+        os.replace(temp_file, DATA_FILE)
+        return True
+    except OSError as error:
+        st.error(f"تعذر حفظ البيانات على مساحة التشغيل: {error}")
+        return False
 
-# تهيئة ومزامنة البيانات مع المستودع الدائم
+
 if "system_loaded" not in st.session_state:
     persisted = load_system_data()
-    st.session_state.credentials = persisted["credentials"]
-    st.session_state.workers = persisted["workers"]
-    st.session_state.commission_rate = float(persisted.get("commission_rate", 10.0))
-    st.session_state.services = persisted["services"]
-    st.session_state.products = persisted["products"]
-    st.session_state.session_state_invoices = persisted["session_state_invoices"]
-    st.session_state.daily_sales = persisted["daily_sales"]
-    st.session_state.daily_expenses = persisted["daily_expenses"]
-    st.session_state.daily_archive = persisted["daily_archive"]
-    st.session_state.monthly_archive = persisted["monthly_archive"]
+    for key, value in persisted.items():
+        st.session_state[key] = value
     st.session_state.system_loaded = True
 
-# صيانة الصلاحيات للحسابات القديمة منعاً لأي خطأ برمي
-for w_user, w_data in st.session_state.credentials["workers_accounts"].items():
-    if "permissions" not in w_data:
-        st.session_state.credentials["workers_accounts"][w_user]["permissions"] = ["🛒 كاشير الاستقبال POS", "📑... دفتر المصروفات"]
+# Normalize older worker accounts.
+for account in st.session_state.credentials.get("workers_accounts", {}).values():
+    account.setdefault("permissions", ["🛒 كاشير الاستقبال POS"])
+    account.setdefault("role", "worker")
 
-# ============================================================================
-# 2. نظام تسجيل الدخول وإدارة الصلاحيات وحماية الواجهة
-# ============================================================================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "user_role" not in st.session_state:
-    st.session_state.user_role = None
-if "current_user" not in st.session_state:
-    st.session_state.current_user = None
-if "current_user_id" not in st.session_state:
-    st.session_state.current_user_id = None
+# =============================================================================
+# Login
+# =============================================================================
+for key, default in {
+    "logged_in": False,
+    "user_role": None,
+    "current_user": None,
+    "current_user_id": None,
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 if not st.session_state.logged_in:
-    st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Sabiha Hub ✨ لوحة تسجيل الدخول</h1>", unsafe_allow_html=True)
+    st.markdown(
+        "<h1 style='text-align:center;color:#173b63'>✨ Sabiha Hub | تسجيل الدخول</h1>",
+        unsafe_allow_html=True,
+    )
     st.write("---")
-    
-    col_login_box, _ = st.columns([2, 2])
-    with col_login_box:
-        st.subheader("🔑 يرجى إدخال بيانات النظام الموحد")
-        input_user = st.text_input("👤 اسم المستخدم:", key="main_username_input").strip()
-        input_pass = st.text_input("🔒 كلمة المرور:", type="password", key="main_password_input").strip()
-        
-        if st.button("دخول النظام 🚀", use_container_width=True):
-            if input_user == st.session_state.credentials["owner"]["username"] and input_pass == st.session_state.credentials["owner"]["password"]:
+    left, center, right = st.columns([1, 2, 1])
+    with center:
+        st.subheader("🔑 أدخل بيانات حسابك")
+        login_user = st.text_input("👤 اسم المستخدم", key="login_username").strip()
+        login_password = st.text_input("🔒 كلمة المرور", type="password", key="login_password").strip()
+        if st.button("دخول النظام 🚀", type="primary", use_container_width=True):
+            owner = st.session_state.credentials.get("owner", {})
+            if login_user == owner.get("username") and login_password == owner.get("password"):
                 st.session_state.logged_in = True
                 st.session_state.user_role = "owner"
-                st.session_state.current_user = "owner"
+                st.session_state.current_user = "المالك"
                 st.session_state.current_user_id = "owner"
-                st.success("🎉 أهلاً بك يا مالك المنظومة، تم تسجيل الدخول بنجاح!")
                 st.rerun()
             else:
-                login_success = False
-                for w_id, w_info in st.session_state.credentials["workers_accounts"].items():
-                    if input_user == w_id and input_pass == w_info["password"]:
-                        st.session_state.logged_in = True
-                        st.session_state.user_role = "worker"
-                        st.session_state.current_user = w_info["name"]
-                        st.session_state.current_user_id = w_id
-                        login_success = True
-                        st.success(f"🎉 تم تسجيل دخول الموظف: {w_info['name']}")
-                        st.rerun()
+                matched = None
+                for uid, account in st.session_state.credentials.get("workers_accounts", {}).items():
+                    if login_user == uid and login_password == account.get("password"):
+                        matched = (uid, account)
                         break
-                if not login_success:
-                    st.error("❌ بيانات الدخول غير صحيحة، يرجى التحقق وإعادة المحاولة.")
+                if matched:
+                    uid, account = matched
+                    st.session_state.logged_in = True
+                    st.session_state.user_role = "worker"
+                    st.session_state.current_user = account.get("name", uid)
+                    st.session_state.current_user_id = uid
+                    st.rerun()
+                else:
+                    st.error("بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.")
+        st.caption("لو دي أول مرة تشغّل النظام، راجع بيانات الدخول الافتراضية في إعدادات النشر وغيّرها فورًا.")
     st.stop()
 
-# ============================================================================
-# 3. شريط التنقل الجانبي (Sidebar) وتطهير خيارات الصلاحيات ديناميكياً
-# ============================================================================
-st.sidebar.markdown(f"### 🚪 مرحباً: **{st.session_state.current_user}**")
-st.sidebar.markdown(f"💼 صلاحية الحساب: `{st.session_state.user_role}`")
+
+# =============================================================================
+# Navigation and shared helpers
+# =============================================================================
+st.sidebar.markdown(f"### 👋 مرحباً: {st.session_state.current_user}")
+st.sidebar.caption(f"نوع الحساب: {st.session_state.user_role}")
 st.sidebar.write("---")
 
 if st.sidebar.button("تسجيل الخروج 🔓", use_container_width=True):
@@ -184,669 +297,743 @@ if st.sidebar.button("تسجيل الخروج 🔓", use_container_width=True):
     st.session_state.current_user_id = None
     st.rerun()
 
-if st.sidebar.button("🔄 مزامنة وتحديث البيانات لحظياً", use_container_width=True):
+if st.sidebar.button("🔄 تحديث البيانات", use_container_width=True):
     st.rerun()
 
-all_possible_pages = [
+PAGES = [
     "📊 لوحة الداشبورد الرئيسية",
     "🛒 كاشير الاستقبال POS",
     "📉 تقرير الحسابات والأرشيف",
     "💸 العمولات والسلفيات الحية",
-    "📑... دفتر المصروفات",
-    "⚙️ إعدادات الباقات والعمال"
+    "📑 دفتر المصروفات",
+    "⚙️ إعدادات الباقات والعمال",
 ]
-
 if st.session_state.user_role == "owner":
-    menu_options = all_possible_pages
+    allowed_pages = PAGES
 else:
-    current_uid = st.session_state.current_user_id
-    user_account_data = st.session_state.credentials["workers_accounts"].get(current_uid, {})
-    menu_options = user_account_data.get("permissions", ["🛒 كاشير الاستقبال POS"])
-    if not menu_options:
-        menu_options = ["🛒 كاشير الاستقبال POS"]
+    acc = st.session_state.credentials.get("workers_accounts", {}).get(
+        st.session_state.current_user_id, {}
+    )
+    allowed_pages = [p for p in acc.get("permissions", []) if p in PAGES]
+    if not allowed_pages:
+        allowed_pages = ["🛒 كاشير الاستقبال POS"]
 
-raw_menu = st.sidebar.radio("📍 الانتقال بين الصفحات والمعاملات:", options=menu_options)
+selected_page = st.sidebar.radio("📍 التنقل بين الصفحات", allowed_pages)
+menu_map = {
+    "📊 لوحة الداشبورد الرئيسية": "dashboard",
+    "🛒 كاشير الاستقبال POS": "pos",
+    "📉 تقرير الحسابات والأرشيف": "archive",
+    "💸 العمولات والسلفيات الحية": "commissions",
+    "📑 دفتر المصروفات": "expenses",
+    "⚙️ إعدادات الباقات والعمال": "settings",
+}
+page = menu_map[selected_page]
 
-menu = "📊 لوحة الداشبورد الرئيسية"
-if "كاشير" in raw_menu or "POS" in raw_menu:
-    menu = "كاشير الاستقبال POS"
-elif "الأرشيف" in raw_menu or "تقرير" in raw_menu or "الحسابات" in raw_menu:
-    menu = "تقرير الحسابات والأرشيف"
-elif "العمولات" in raw_menu or "السلفيات" in raw_menu:
-    menu = "العمولات والسلفيات الحية"
-elif "المصروفات" in raw_menu or "دفتر" in raw_menu:
-    menu = "📑 دفتر المصروفات"
-elif "إعدادات" in raw_menu or "الباقات" in raw_menu:
-    menu = "إعدادات الباقات والعمال"
+workers = [
+    item.get("name")
+    for item in st.session_state.workers
+    if isinstance(item, dict) and item.get("name")
+]
+if not workers:
+    workers = ["لا يوجد فني مسؤول"]
 
-# دالة لتوليد كود طباعة الفاتورة الفردية للعميل كـ PDF
-def generate_receipt_pdf_trigger(inv, key_suffix):
-    status_str = "نشطة" if inv.get("status", "Active") == "Active" else f"مرتجع (السبب: {inv.get('refund_reason', 'غير محدد')})"
-    type_label = "منتج" if inv.get("sale_type") == "product" else "خدمة"
-    discount_display = f"<tr><td><b>الخصم الممنوح:</b></td><td>{inv.get('discount', 0.0):.2f} ج.م</td></tr>" if inv.get('discount', 0.0) > 0 else ""
-    receipt_script = f"""
-    <script>
-    function printReceipt_{key_suffix}() {{
-        var win = window.open("", "", "height=500,width=400");
-        win.document.write("<html><head><title>فاتورة عميل - Sabiha Hub</title>");
-        win.document.write("<style>body{{font-family:sans-serif;direction:rtl;padding:10px;text-align:center;}} .ticket{{width:100%;max-width:300px;margin:auto;}} .header{{margin-bottom:15px;}} table{{width:100%;border-collapse:collapse;margin-top:10px;}} td{{padding:6px;text-align:right;font-size:14px;}} .total{{font-size:18px;font-weight:bold;margin-top:15px;border-top:1px dashed #000;padding-top:10px;}}</style>");
-        win.document.write("</head><body>");
-        win.document.write("<div class='ticket'>");
-        win.document.write("<div class='header'><h2>✨ Sabiha Hub ✨</h2><p>مركز صبيحة للعناية بالسيارات</p></div>");
-        win.document.write("<hr style='border-top:1px dashed #000;'>");
-        win.document.write("<table>");
-        win.document.write("<tr><td><b>رقم الفاتورة:</b></td><td>{inv['id']}</td></tr>");
-        win.document.write("<tr><td><b>التاريخ:</b></td><td>{inv['time']}</td></tr>");
-        win.document.write("<tr><td><b>نوع العملية:</b></td><td>{type_label}</td></tr>");
-        win.document.write("<tr><td><b>رقم اللوحة:</b></td><td>{inv.get('plate_number', '---')}</td></tr>");
-        win.document.write("<tr><td><b>البيان / البند:</b></td><td>{inv['service']}</td></tr>");
-        win.document.write("<tr><td><b>الفئة / الحجم:</b></td><td>{inv.get('car_type', '---')}</td></tr>");
-        win.document.write("<tr><td><b>وسيلة الدفع:</b></td><td>{inv.get('payment','كاش')}</td></tr>");
-        win.document.write(`{discount_display}`);
-        win.document.write("<tr><td><b>الحالة:</b></td><td>{status_str}</td></tr>");
-        win.document.write("</table>");
-        win.document.write("<div class='total'><p>الإجمالي النهائي: {inv['total']:.2f} ج.م</p></div>");
-        win.document.write("<hr style='border-top:1px dashed #000;'>");
-        win.document.write("<p style='font-size:12px;'>شكراً لزيارتكم لـ Sabiha Hub 😊</p>");
-        win.document.write("</div>");
-        win.document.write("</body></html>");
-        win.document.close();
-        win.print();
-    }}
-    </script>
-    <button onclick="printReceipt_{key_suffix}()" style="background-color:#10B981;color:white;padding:6px 12px;border:none;border-radius:4px;cursor:pointer;font-size:13px;width:100%;">🖨️ طباعة الفاتورة للعميل (PDF)</button>
-    """
-    st.components.v1.html(receipt_script, height=35)
 
-# تجميع الفواتير لليوم
-all_invoices = []
-seen_inv_ids = set()
-for worker_name, inv_list in st.session_state.session_state_invoices.items():
-    for inv in inv_list:
-        if inv["id"] not in seen_inv_ids:
-            seen_inv_ids.add(inv["id"])
-            all_invoices.append(inv.copy())
+def get_all_invoices():
+    """Invoices are stored under each participating worker; show each invoice once."""
+    result, seen = [], set()
+    for invoice_list in st.session_state.session_state_invoices.values():
+        for invoice in invoice_list:
+            invoice_id = invoice.get("id")
+            if invoice_id and invoice_id not in seen:
+                seen.add(invoice_id)
+                result.append(invoice.copy())
+    return sorted(result, key=lambda x: x.get("time", ""))
 
-worker_list = [w["name"] for w in st.session_state.workers if isinstance(w, dict) and "name" in w]
-if not worker_list:
-    worker_list = ["لا يوجد فني مسؤول"]
 
-# ============================================================================
-# 4. واجهات الصفحات والمعاملات المحاسبية
-# ============================================================================
+def update_invoice(invoice_id, updates):
+    for invoice_list in st.session_state.session_state_invoices.values():
+        for invoice in invoice_list:
+            if invoice.get("id") == invoice_id:
+                invoice.update(updates)
 
-if menu == "📊 لوحة الداشبورد الرئيسية":
+
+def invoice_workers(invoice):
+    names = invoice.get("workers") or invoice.get("commission_workers") or []
+    if not names:
+        names = [invoice.get("worker1", "مبيعات مباشرة")]
+    return [name for name in names if name and name != "مبيعات مباشرة"]
+
+
+def printable_html(title, body):
+    safe_title = html.escape(str(title))
+    return f"""<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+    <title>{safe_title}</title><style>
+    body{{font-family:Arial,sans-serif;padding:24px;color:#17324d;direction:rtl}}
+    h1,h2{{color:#173b63}}table{{width:100%;border-collapse:collapse;margin-top:18px}}
+    th,td{{border:1px solid #d8e1ea;padding:8px;text-align:right}}
+    th{{background:#edf3f8}}.summary{{padding:14px;background:#f4f7fb;border-radius:10px}}
+    </style></head><body><h1>{safe_title}</h1>{body}</body></html>"""
+
+
+def invoice_dataframe(invoices):
+    rows = []
+    for inv in invoices:
+        rows.append({
+            "رقم الفاتورة": inv.get("id", ""),
+            "التاريخ": inv.get("time", ""),
+            "رقم اللوحة": inv.get("plate_number", "---"),
+            "النوع": "منتج" if inv.get("sale_type") == "product" else "خدمة",
+            "البيان": inv.get("service", ""),
+            "الفئة": inv.get("car_type", "---"),
+            "الإجمالي": float(inv.get("total", 0)),
+            "الخصم": float(inv.get("discount", 0)),
+            "الفنيون": "، ".join(invoice_workers(inv)),
+            "العمولة": float(inv.get("commission_total", 0)),
+            "الحالة": "نشطة" if inv.get("status", "Active") == "Active" else "مرتجع",
+            "الدفع": inv.get("payment", "كاش"),
+        })
+    return pd.DataFrame(rows)
+
+
+def show_invoice_card(inv, prefix, index, allow_refund=True):
+    status = inv.get("status", "Active")
+    with st.container(border=True):
+        c1, c2, c3 = st.columns([2, 2, 2])
+        with c1:
+            st.markdown(f"**🧾 {inv.get('id', '')}**")
+            st.caption(f"اللوحة: {inv.get('plate_number', '---')}")
+        with c2:
+            st.write(inv.get("service", ""))
+            st.caption(inv.get("time", ""))
+        with c3:
+            st.metric("صافي الفاتورة", f"{float(inv.get('total', 0)):.2f}")
+            st.caption("ج.م")
+        st.write(
+            f"الفنيون: {', '.join(invoice_workers(inv)) or 'مبيعات مباشرة'} · "
+            f"العمولة الإجمالية: {float(inv.get('commission_total', 0)):.2f} ج.م"
+        )
+        if status == "Refunded":
+            st.error(
+                f"مرتجع بواسطة: {inv.get('cancelled_by', '---')} | "
+                f"السبب: {inv.get('refund_reason', 'غير محدد')}"
+            )
+        elif allow_refund:
+            with st.expander("إرجاع الفاتورة"):
+                reason = st.text_input("سبب الإرجاع", key=f"{prefix}_reason_{inv['id']}_{index}")
+                cancelled_by = st.selectbox(
+                    "الموظف المسؤول عن الإرجاع",
+                    ["اختر الموظف"] + workers,
+                    key=f"{prefix}_by_{inv['id']}_{index}",
+                )
+                if st.button("تأكيد إرجاع الفاتورة ↩️", key=f"{prefix}_refund_{inv['id']}_{index}"):
+                    if not reason.strip():
+                        st.error("اكتب سبب الإرجاع أولاً.")
+                    elif cancelled_by == "اختر الموظف":
+                        st.error("اختر الموظف المسؤول.")
+                    else:
+                        update_invoice(inv["id"], {
+                            "status": "Refunded",
+                            "refund_reason": reason.strip(),
+                            "cancelled_by": cancelled_by,
+                        })
+                        save_system_data()
+                        st.success("تم تسجيل الإرجاع.")
+                        st.rerun()
+
+
+invoices = get_all_invoices()
+active_invoices = [x for x in invoices if x.get("status", "Active") == "Active"]
+refunded_invoices = [x for x in invoices if x.get("status") == "Refunded"]
+service_invoices = [x for x in active_invoices if x.get("sale_type", "service") == "service"]
+sales_today = sum(float(x.get("total", 0)) for x in active_invoices)
+commissions_today = sum(float(x.get("commission_total", 0)) for x in active_invoices)
+expenses_today = sum(float(v) for v in st.session_state.daily_expenses.values())
+vat_today = sales_today * 0.14
+net_today = sales_today - expenses_today - vat_today - commissions_today
+st.session_state.daily_sales = sales_today
+
+# =============================================================================
+# Dashboard
+# =============================================================================
+if page == "dashboard":
     st.markdown("""
     <section class="sh-hero">
       <h1>✨ Sabiha Hub | لوحة التحكم</h1>
-      <p>نظرة موحّدة على الأداء المالي والتشغيلي ومتابعة حركة اليوم</p>
-    </section>
-    """, unsafe_allow_html=True)
-    st.caption(f"🟢 النظام يعمل · {datetime.datetime.now().strftime('%Y-%m-%d  %H:%M')}")
-    
-    calculated_sales = 0.0
-    total_commissions = 0.0
-    active_invoices_count = 0
-    canceled_invoices_total = 0.0  
-    active_cars_count = 0          
-    
-    for inv in all_invoices:
-        if inv.get("status", "Active") == "Active":
-            calculated_sales += float(inv.get("total", 0.0))
-            total_commissions += float(inv.get("commission_total", 0.0))
-            active_invoices_count += 1
-            if inv.get("sale_type", "service") == "service":
-                active_cars_count += 1
-        else:
-            canceled_invoices_total += float(inv.get("total", 0.0))
-            
-    st.session_state.daily_sales = calculated_sales
-    tax_14 = st.session_state.daily_sales * 0.14
-    total_expenses_today = float(st.session_state.daily_expenses.get("rent", 0.0)) + \
-                         float(st.session_state.daily_expenses.get("operational", 0.0)) + \
-                         float(st.session_state.daily_expenses.get("utilities", 0.0))
-                         
-    net_profit = st.session_state.daily_sales - total_expenses_today - tax_14 - total_commissions
-
-    col_m1, col_m2, col_m3, col_cars = st.columns(4)
-    with col_m1: st.metric("💰 إجمالي المبيعات المحصلة", f"{st.session_state.daily_sales:.2f} ج.م", delta=f"{active_invoices_count} فاتورة إجمالية")
-    with col_m2: st.metric("📉 إجمالي مصروفات اليوم", f"{total_expenses_today:.2f} ج.م")
-    with col_m3: st.metric("🏛️ ضريبة القيمة المضافة 14%", f"{tax_14:.2f} ج.م")
-    with col_cars: st.metric("🚗 عدد السيارات اليوم الحالية", f"{active_cars_count} سيارة")
-    
-    col_m4, col_m5, col_canceled = st.columns(3)
-    with col_m4: st.metric("👨‍🔧 عمولات الفنيين الحية", f"{total_commissions:.2f} ج.م")
-    with col_m5: st.metric("🟩 صافي المبيعات / الأرباح الحالي", f"{net_profit:.2f} ج.م")
-    with col_canceled: st.metric("🚨 إجمالي الفواتير الملغاة (Refunded)", f"{canceled_invoices_total:.2f} ج.م")
-    
-    st.write("---")
-    st.subheader("📥 تحميل وطباعة التقارير والملخصات للمالك")
-    
-    invoices_html_rows = ""
-    for inv in all_invoices:
-        status_text = "نشطة" if inv.get("status", "Active") == "Active" else f"مرتجع (بواسطة: {inv.get('cancelled_by','---')} | السبب: {inv.get('refund_reason', 'غير محدد')})"
-        item_type = "منتج" if inv.get("sale_type") == "product" else "خدمة"
-        invoices_html_rows += f"""
-        <tr>
-            <td>{inv['id']}</td>
-            <td>{inv.get('plate_number', '---')}</td>
-            <td>{item_type}</td>
-            <td>{inv['service']}</td>
-            <td>{inv.get('car_type', '---')}</td>
-            <td>{inv['total']:.2f} ج.م</td>
-            <td>{inv.get('discount', 0.0):.2f} ج.م</td>
-            <td>{', '.join(inv.get('workers', inv.get('commission_workers', [inv.get('worker1','---'), inv.get('worker2','---')])))}</td>
-            <td>{status_text}</td>
-        </tr>
-        """
-
-    pdf_script = f"""
-    <script>
-    function printReport() {{
-        var win = window.open("", "", "height=700,width=900");
-        win.document.write("<html><head><title>Sabiha Hub - التقرير اليومي</title>");
-        win.document.write("<style>body{{font-family:sans-serif;direction:rtl;padding:20px;}} table{{width:100%;border-collapse:collapse;margin-top:20px;}} th,td{{border:1px solid #ddd;padding:10px;text-align:right;font-size:14px;}} th{{background-color:#f4f4f4;}} .summary{{margin-bottom:30px;background:#f9f9f9;padding:15px;border-radius:8px;}}</style>");
-        win.document.write("</head><body>");
-        win.document.write("<h2>📊 التقرير المالي والتشغيلي اليومي - Sabiha Hub</h2>");
-        win.document.write("<p><b>التاريخ:</b> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>");
-        win.document.write("<div class='summary'>");
-        win.document.write("<h3>💰 الملخص المالي اليومي:</h3>");
-        win.document.write("<p><b>إجمالي المبيعات:</b> {st.session_state.daily_sales:.2f} ج.م</p>");
-        win.document.write("<p><b>إجمالي المصروفات:</b> {total_expenses_today:.2f} ج.م</p>");
-        win.document.write("<p><b>ضريبة القيمة المضافة 14%:</b> {tax_14:.2f} ج.م</p>");
-        win.document.write("<p><b>عمولات العمال والفنيين:</b> {total_commissions:.2f} ج.م</p>");
-        win.document.write("<p><b>عدد السيارات المخدومة:</b> {active_cars_count} سيارة</p>");
-        win.document.write("<p><b>إجمالي المبالغ الملغاة/المرتجعة:</b> {canceled_invoices_total:.2f} ج.م</p>");
-        win.document.write("<p><b>صافي المبيعات والأرباح:</b> {net_profit:.2f} ج.م</p>");
-        win.document.write("</div>");
-        win.document.write("<h3>📋 كشف الفواتير والعمليات المُرَحَّلة:</h3>");
-        win.document.write("<table><thead><tr><th>رقم الفاتورة</th><th>رقم اللوحة</th><th>النوع</th><th>البيان</th><th>الفئة</th><th>المبلغ</th><th>الخصم</th><th>الفنيين</th><th>الحالة</th></tr></thead><tbody>");
-        win.document.write(`{invoices_html_rows}`);
-        win.document.write("</tbody></table>");
-        win.document.close();
-        win.print();
-    }}
-    </script>
-    <button onclick="printReport()" style="background-color:#1E3A8A;color:white;padding:12px 24px;border:none;border-radius:6px;cursor:pointer;font-size:16px;width:100%;">📥 تحميل وطباعة التقرير اليومي الشامل كـ PDF</button>
-    """
-    st.components.v1.html(pdf_script, height=60)
-    
-    st.write("---")
-    st.subheader("🏁 إدارة الإغلاقات والترحيل التلقائي للأرشيف")
-    col_close1, col_close2 = st.columns(2)
-    
-    with col_close1:
-        if st.button("🏁 إغلاق وترحيل اليوم الحالي تلقائياً إلى الأرشيف الشهري", use_container_width=True):
-            today_str = datetime.datetime.now().strftime("%Y-%m-%d (%A)")
-            if st.session_state.daily_sales == 0 and total_expenses_today == 0:
-                st.warning("⚠️ لا توجد معاملات مالية مسجلة اليوم لترحيلها.")
+      <p>متابعة المبيعات والعمولات والمصروفات وحركة السيارات</p>
+    </section>""", unsafe_allow_html=True)
+    st.caption(f"🟢 النظام يعمل · {dt.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    a, b, c, d = st.columns(4)
+    a.metric("💰 المبيعات المحصلة", f"{sales_today:,.2f} ج.م", f"{len(active_invoices)} فاتورة")
+    b.metric("📉 مصروفات اليوم", f"{expenses_today:,.2f} ج.م")
+    c.metric("🏛️ ضريبة 14% تقديرية", f"{vat_today:,.2f} ج.م")
+    d.metric("🚗 سيارات مخدومة", len(service_invoices))
+    e, f, g = st.columns(3)
+    e.metric("👨‍🔧 عمولات الفنيين", f"{commissions_today:,.2f} ج.م")
+    f.metric("🟩 صافي تقديري", f"{net_today:,.2f} ج.م")
+    g.metric("↩️ إجمالي المرتجعات", f"{sum(float(x.get('total',0)) for x in refunded_invoices):,.2f} ج.م")
+    st.info("ملاحظة: الضريبة محسوبة هنا كتقدير 14% من المبيعات. راجع المعالجة الضريبية الفعلية مع المحاسب.")
+    st.divider()
+    st.subheader("📥 تقرير اليوم")
+    df = invoice_dataframe(invoices)
+    if not df.empty:
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "تحميل فواتير اليوم CSV",
+            df.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"sabiha_invoices_{dt.date.today()}.csv",
+            mime="text/csv",
+        )
+        report_body = (
+            f"<div class='summary'><p>المبيعات: {sales_today:.2f} ج.م</p>"
+            f"<p>المصروفات: {expenses_today:.2f} ج.م</p>"
+            f"<p>الضريبة التقديرية: {vat_today:.2f} ج.م</p>"
+            f"<p>العمولات: {commissions_today:.2f} ج.م</p>"
+            f"<p>الصافي التقديري: {net_today:.2f} ج.م</p></div>"
+            + df.to_html(index=False, border=0)
+        )
+        st.download_button(
+            "تحميل تقرير اليوم HTML (قابل للطباعة PDF)",
+            printable_html("التقرير اليومي - Sabiha Hub", report_body).encode("utf-8"),
+            file_name=f"sabiha_daily_report_{dt.date.today()}.html",
+            mime="text/html",
+        )
+    else:
+        st.info("لا توجد فواتير مسجلة اليوم.")
+    st.divider()
+    st.subheader("🏁 إغلاق اليوم وترحيله")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("إغلاق وترحيل اليوم الحالي", type="primary", use_container_width=True):
+            if not invoices and expenses_today == 0:
+                st.warning("لا توجد معاملات لترحيلها.")
             else:
-                st.session_state.daily_archive[today_str] = {
-                    "sales": st.session_state.daily_sales,
-                    "expenses": total_expenses_today,
-                    "tax": tax_14,
-                    "commissions": total_commissions,
-                    "cars_count": active_cars_count,
-                    "canceled_total": canceled_invoices_total,
-                    "net": net_profit,
-                    "invoices": json.loads(json.dumps(st.session_state.session_state_invoices))
-                }
-                st.session_state.session_state_invoices = {}
-                st.session_state.daily_sales = 0.0
-                st.session_state.daily_expenses = {"rent": 0.0, "operational": 0.0, "utilities": 0.0}
-                save_system_data()
-                st.success(f"✅ تم إغلاق اليوم وترحيل حساباته بنجاح بالتاريخ: {today_str}")
-                st.rerun()
-                
-    with col_close2:
-        if st.button("📁 إغلاق الشهر الحالي وتصفير العدادات لبدء شهر جديد", use_container_width=True):
-            month_str = datetime.datetime.now().strftime("%Y-%B")
+                today_key = dt.datetime.now().strftime("%Y-%m-%d (%A)")
+                if today_key in st.session_state.daily_archive:
+                    st.error("يوجد أرشيف مسجل لهذا التاريخ بالفعل؛ راجع الأرشيف قبل الإغلاق مرة أخرى.")
+                else:
+                    st.session_state.daily_archive[today_key] = {
+                        "sales": sales_today,
+                        "expenses": expenses_today,
+                        "tax": vat_today,
+                        "commissions": commissions_today,
+                        "cars_count": len(service_invoices),
+                        "canceled_total": sum(float(x.get("total", 0)) for x in refunded_invoices),
+                        "net": net_today,
+                        "invoices": deepcopy(st.session_state.session_state_invoices),
+                    }
+                    st.session_state.session_state_invoices = {}
+                    st.session_state.daily_sales = 0.0
+                    st.session_state.daily_expenses = {"rent": 0.0, "operational": 0.0, "utilities": 0.0}
+                    save_system_data()
+                    st.success("تم إغلاق اليوم وترحيله.")
+                    st.rerun()
+    with c2:
+        if st.button("إغلاق الشهر الحالي", use_container_width=True):
+            month_key = dt.datetime.now().strftime("%Y-%m")
             if not st.session_state.daily_archive:
-                st.warning("⚠️ أرشيف الأيام فارغ، يرجى ترحيل الأيام أولاً قبل إغلاق الشهر.")
+                st.warning("أرشيف الأيام فارغ. أغلق الأيام أولاً.")
+            elif month_key in st.session_state.monthly_archive:
+                st.error("يوجد أرشيف لهذا الشهر بالفعل.")
             else:
-                st.session_state.monthly_archive[month_str] = json.loads(json.dumps(st.session_state.daily_archive))
+                st.session_state.monthly_archive[month_key] = deepcopy(st.session_state.daily_archive)
                 st.session_state.daily_archive = {}
                 save_system_data()
-                st.success(f"🎉 تم ترحيل وأرشفة الشهر بالكامل بنجاح داخل الذاكرة التراكمية [{month_str}]!")
+                st.success("تم حفظ الأرشيف الشهري.")
                 st.rerun()
-    
-    st.write("---")
-    st.subheader("📋 كشف فواتير اليوم وإدارة المرتجعات (Refund)")
-    
-    if all_invoices:
-        for index, inv in enumerate(all_invoices):
-            col_i1, col_i2, col_i3, col_i4, col_refund = st.columns([2, 2, 2, 2, 2])
-            with col_i1: 
-                type_badge = "📦 منتج" if inv.get("sale_type") == "product" else "🛠️ خدمة"
-                st.write(f"🧾 رقم: **{inv['id']}** | النوع: `{type_badge}` | اللوحة: `({inv.get('plate_number', '---')})`")
-            with col_i2: 
-                st.write(f"🛍️ البيان: *{inv['service']}* | الخصم: `{inv.get('discount', 0.0):.2f} ج.م`")
-                if inv.get("status") == "Refunded":
-                    st.markdown(f"<span style='color:red; font-size:12px;'>💬 الملغي بواسطة: {inv.get('cancelled_by','---')} | السبب: {inv.get('refund_reason','---')}</span>", unsafe_allow_html=True)
-            with col_i3: st.write(f"💵 القيمة النهائية: `{inv['total']:.2f} ج.م` | العمولة: `{inv.get('commission_total', 0.0):.2f} ج.م`")
-            with col_i4: 
-                if inv.get("status", "Active") == "Active":
-                    st.markdown("🟢 **الفاتورة نشطة**")
-                else:
-                    st.markdown("<span style='color:red;'>↩️ **تم الاسترجاع (Refunded)**</span>", unsafe_allow_html=True)
-            with col_refund:
-                if inv.get("status", "Active") == "Active":
-                    refund_reason_input = st.text_input("سبب الإلغاء 📝", key=f"dash_reason_{inv['id']}_{index}", placeholder="اكتب سبب التراجع أولاً...")
-                    cancelled_by_worker = st.selectbox("الفني المسؤول عن الكنسلة 👨‍🔧", options=["اختر الفني"] + worker_list, key=f"dash_cancel_worker_{inv['id']}_{index}")
-                    if st.button("إرجاع الفاتورة ↩️", key=f"dash_ref_btn_{inv['id']}_{index}"):
-                        if refund_reason_input.strip() == "":
-                            st.error("❌ خطأ: يجب كتابة سبب الإلغاء لإتمام العملية!")
-                        elif cancelled_by_worker == "اختر الفني":
-                            st.error("❌ خطأ: يجب اختيار الفني القائم بالكنسلة!")
-                        else:
-                            for w_key, w_invs in st.session_state.session_state_invoices.items():
-                                for item in w_invs:
-                                    if item["id"] == inv["id"]:
-                                        item["status"] = "Refunded"
-                                        item["refund_reason"] = refund_reason_input.strip()
-                                        item["cancelled_by"] = cancelled_by_worker
-                            save_system_data()
-                            st.error(f"↩️ تم تسجيل مرتجع للفاتورة [{inv['id']}].")
-                            st.rerun()
-                else:
-                    st.button("تم ردها مسبقاً 🔒", disabled=True, key=f"dash_ref_dis_{inv['id']}_{index}")
+    st.divider()
+    st.subheader("📋 الفواتير والمرتجعات")
+    for i, inv in enumerate(invoices):
+        show_invoice_card(inv, "dash", i)
+
+
+# =============================================================================
+# POS
+# =============================================================================
+elif page == "pos":
+    st.markdown("## 🛒 كاشير الاستقبال وإصدار الفواتير")
+    sale_type = st.radio(
+        "نوع العملية",
+        ["خدمة سيارة 🛠️", "بيع منتج 📦"],
+        horizontal=True,
+        key="pos_sale_type",
+    )
+    is_product = sale_type.startswith("بيع منتج")
+    base_price = 0.0
+    selected_item = ""
+    plate = "---"
+    car_type = "---"
+    selected_workers = []
+
+    if not is_product:
+        plate = st.text_input("🔢 رقم لوحة السيارة").strip()
+        car_type = st.selectbox("🚗 فئة السيارة", ["ملاكي / سيدان", "SUV"])
+        price_key = "الملكي" if car_type == "ملاكي / سيدان" else "SUV"
+        service_names = list(st.session_state.services.keys())
+        if service_names:
+            selected_item = st.selectbox("🛠️ الخدمة", service_names)
+            base_price = float(st.session_state.services[selected_item].get(price_key, 0))
+        else:
+            st.warning("لا توجد خدمات. أضف خدمة من الإعدادات.")
+        selected_workers = st.multiselect(
+            "👨‍🔧 الفنيون المشاركون في السيارة",
+            workers,
+            default=[workers[0]] if workers and workers[0] != "لا يوجد فني مسؤول" else [],
+            key="pos_workers",
+            help="يمكن اختيار أكثر من فني. العمولة الإجمالية تُقسم بالتساوي بينهم.",
+        )
     else:
-        st.info("ℹ️ لا توجد فواتير أو عمليات مسجلة لليوم حتى الآن.")
+        product_names = list(st.session_state.products.keys())
+        if product_names:
+            selected_item = st.selectbox("📦 المنتج", product_names)
+            base_price = float(st.session_state.products[selected_item])
+        else:
+            st.warning("لا توجد منتجات. أضف منتجاً من الإعدادات.")
+        product_worker = st.selectbox("الموظف المسؤول عن البيع", ["مبيعات مباشرة"] + workers)
 
-elif menu == "كاشير الاستقبال POS":
-    st.markdown("<h2 style='text-align: center;'>📥 كاشير الاستقبال وتسجيل الفواتير</h2>", unsafe_allow_html=True)
-    st.write("---")
-    
-    with st.container():
-        sale_type_selection = st.radio("📦 حدد تصنيف عملية البيع الحالية:", options=["بيع خدمة مركز 🛠️", "بيع منتج / إكسسوار 📦"], horizontal=True)
-        
-        base_price = 0.0
-        fixed_comm = 0.0
-        plate_number = "---"
-        car_type = "---"
-        selected_worker1 = "مبيعات مباشرة"
-        selected_worker2 = "مبيعات مباشرة"
-        selected_item_name = ""
-        is_product = False
-
-        if sale_type_selection == "بيع خدمة مركز 🛠️":
-            plate_number = st.text_input("🔢 رقم لوحة السيارة:", key="pos_plate_number_input").strip()
-            car_type = st.selectbox("🚗 فئة حجم السيارة للتسعير الآلي المعتمد أولياً:", options=["ملاكي / سيدان", "SUV"])
-            car_key = "الملكي" if car_type == "ملاكي / سيدان" else "SUV"
-            
-            service_options = list(st.session_state.services.keys())
-            if not service_options:
-                service_options = ["لا توجد خدمات"]
-            selected_item_name = st.selectbox("🛍️ اختر الخدمة المعتمدة:", options=service_options)
-            
-            selected_workers = st.multiselect(
-                "👨‍🔧 الفنيون المشاركون في السيارة:",
-                options=worker_list,
-                default=[worker_list[0]] if worker_list else [],
-                key="pos_workers_multi",
-                help="اختر كل الفنيين المشاركين. تُحسب العمولة الإجمالية مرة واحدة ثم تُقسّم بالتساوي بينهم."
+    p1, p2 = st.columns(2)
+    with p1:
+        st.metric("السعر الأساسي (ج.م)", f"{base_price:.2f}")
+    with p2:
+        discount = st.number_input("الخصم (ج.م)", min_value=0.0, value=0.0, key="pos_discount")
+    final_total = max(0.0, base_price - discount)
+    payment = st.radio("وسيلة الدفع", ["كاش", "فيزا"], horizontal=True)
+    commission_total = 0.0 if is_product else final_total * float(st.session_state.commission_rate) / 100.0
+    commission_share = commission_total / len(selected_workers) if selected_workers else 0.0
+    st.markdown(f"### الإجمالي الصافي: **{final_total:.2f} ج.م**")
+    st.caption(
+        f"العمولة الإجمالية: {commission_total:.2f} ج.م | "
+        f"عدد الفنيين: {len(selected_workers)} | نصيب كل فني: {commission_share:.2f} ج.م"
+    )
+    if st.button("🟢 إتمام المعاملة وإصدار الفاتورة", type="primary", use_container_width=True):
+        invalid = not selected_item
+        if not is_product and not plate:
+            invalid = True
+        if not is_product and not selected_workers:
+            st.error("اختر فنيًا واحدًا على الأقل لتسجيل عمولته.")
+            invalid = True
+        if invalid:
+            st.error("راجع بيانات العملية قبل إصدار الفاتورة.")
+        else:
+            now = dt.datetime.now()
+            invoice_id = f"INV-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+            assigned = selected_workers if not is_product else (
+                [product_worker] if product_worker != "مبيعات مباشرة" else []
             )
-            selected_worker1 = selected_workers[0] if selected_workers else "مبيعات مباشرة"
-            selected_worker2 = selected_workers[1] if len(selected_workers) > 1 else "لا يوجد"
-            
-            if selected_item_name in st.session_state.services:
-                base_price = float(st.session_state.services[selected_item_name].get(car_key, 0.0))
-                fixed_comm = 0.0
-            st.markdown(f"ℹ️ **السعر التلقائي المحفوظ:** `{base_price:.2f} ج.م` | **نسبة عمولة الفنيين:** `{st.session_state.commission_rate:.2f}%` من صافي الفاتورة")
-            
-        else:
-            is_product = True
-            product_options = list(st.session_state.products.keys())
-            if not product_options:
-                product_options = ["لا توجد منتجات مضافة"]
-            selected_item_name = st.selectbox("📦 اختر المنتج المراد بيعه:", options=product_options)
-            
-            selected_worker1 = st.selectbox("👤 الموظف المسؤول عن البيع المباشر:", options=["مبيعات مباشرة"] + worker_list, key="pos_prod_w1")
-            selected_worker2 = "لا يوجد"
-            
-            if selected_item_name in st.session_state.products:
-                base_price = float(st.session_state.products[selected_item_name])
-            fixed_comm = 0.0  
-            st.markdown(f"ℹ️ **سعر بيع المنتج الحالي المحفوظ:** `{base_price:.2f} ج.م`")
-            
-        payment_method = st.radio("💵 وسيلة السداد:", options=["كاش", "فيزا"], horizontal=True)
-        custom_price = st.number_input("💰 القيمة الأساسية المعتمدة للمعاملة (ج.م):", min_value=0.0, value=base_price, disabled=True)
-        customer_discount = st.number_input("📉 إدخال خصم إضافي للعميل إذا رغبت (ج.م):", min_value=0.0, value=0.0, key="pos_discount_input")
-        
-        final_calculated_total = custom_price - customer_discount
-        if final_calculated_total < 0:
-            final_calculated_total = 0.0
-            
-        st.markdown(f"### 💵 الإجمالي الصافي المطلوب تحصيله: <span style='color:green;'>{final_calculated_total:.2f} ج.م</span>", unsafe_allow_html=True)
-        
-        # العمولة نسبة من صافي قيمة الخدمة بعد الخصم، ولا تُحتسب على المنتجات
-        commission_total = (final_calculated_total * st.session_state.commission_rate / 100.0) if not is_product else 0.0
-        assigned_workers = []
-        if not is_product:
-            # دعم عدد غير محدود من الفنيين المختارين مع منع تكرار الاسم.
-            assigned_workers = list(dict.fromkeys(
-                name for name in (selected_workers if "selected_workers" in locals() else [])
-                if name and name != "لا يوجد"
-            ))
-        elif selected_worker1 and selected_worker1 != "مبيعات مباشرة":
-            assigned_workers.append(selected_worker1)
-        commission_per_worker = commission_total / len(assigned_workers) if assigned_workers else 0.0
-        
-        st.caption(f"العمولة الإجمالية: {commission_total:.2f} | عدد الفنيين المشاركين: {len(assigned_workers)} | نصيب كل فني: {commission_per_worker:.2f}")
-        
-        if st.button("🟢 إتمام المعاملة وإصدار الفاتورة حياً", use_container_width=True):
-            if selected_item_name in ["لا توجد خدمات", "لا توجد منتجات مضافة"] or (not is_product and plate_number == ""):
-                st.error("❌ خطأ: يرجى التحقق من استكمال البيانات الأساسية وعملية الإدخال ورقم اللوحة.")
-            else:
-                invoice_id = f"INV-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-                invoice_data = {
-                    "id": invoice_id,
-                    "plate_number": plate_number,
-                    "service": selected_item_name,
-                    "car_type": car_type,
-                    "total": final_calculated_total,
-                    "discount": customer_discount,
-                    "sale_type": "product" if is_product else "service",
-                    "worker1": selected_worker1,
-                    "worker2": selected_worker2,
-                    "workers": assigned_workers,
-                    "commission_rate": float(st.session_state.commission_rate) if not is_product else 0.0,
-                    "commission_total": commission_total,
-                    "commission_share": commission_per_worker,
-                    "commission_workers": assigned_workers,
-                    "payment": payment_method,
-                    "status": "Active",
-                    "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-                
-                invoice_workers = assigned_workers if assigned_workers else [selected_worker1 or "مبيعات مباشرة"]
-                for assigned_worker in invoice_workers:
-                    if assigned_worker not in st.session_state.session_state_invoices:
-                        st.session_state.session_state_invoices[assigned_worker] = []
-                    st.session_state.session_state_invoices[assigned_worker].append(invoice_data.copy())
-                
-                save_system_data()
-                st.success(f"🎉 تم إصدار الفاتورة بنجاح برقم [{invoice_id}]!")
-                st.balloons()
-                st.rerun()
+            inv = {
+                "id": invoice_id,
+                "plate_number": plate,
+                "service": selected_item,
+                "car_type": car_type,
+                "total": final_total,
+                "discount": discount,
+                "sale_type": "product" if is_product else "service",
+                "worker1": assigned[0] if assigned else "مبيعات مباشرة",
+                "worker2": assigned[1] if len(assigned) > 1 else "لا يوجد",
+                "workers": assigned,
+                "commission_rate": float(st.session_state.commission_rate) if not is_product else 0.0,
+                "commission_total": commission_total,
+                "commission_share": commission_share,
+                "commission_workers": assigned,
+                "payment": payment,
+                "status": "Active",
+                "time": now.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            # Store a copy under every participating worker; dashboard deduplicates by invoice ID.
+            invoice_buckets = assigned if assigned else ["مبيعات مباشرة"]
+            for worker_name in invoice_buckets:
+                st.session_state.session_state_invoices.setdefault(worker_name, []).append(inv.copy())
+            save_system_data()
+            st.success(f"تم إصدار الفاتورة بنجاح: {invoice_id}")
+            st.balloons()
+            st.rerun()
 
-    st.write("---")
-    st.subheader("📋 فواتير اليوم الحالية وإدارة المرتجعات (POS Refund)")
-    
-    if all_invoices:
-        for index, inv in enumerate(all_invoices):
-            col_pos1, col_pos2, col_pos3, col_pos_actions = st.columns([3, 2, 2, 3.5])
-            with col_pos1: 
-                status_icon = "🟢" if inv.get("status", "Active") == "Active" else "↩️ مرتجع"
-                st.write(f"🧾 {status_icon} **{inv['id']}** | اللوحة: `({inv.get('plate_number', '---')})`")
-            with col_pos2: 
-                st.write(f"🛍️ {inv['service']} | خصم: `{inv.get('discount', 0.0):.2f} ج.م`")
-                if inv.get("status") == "Refunded":
-                    st.markdown(f"<span style='color:red; font-size:11px;'>💬 الملغي بواسطة: {inv.get('cancelled_by','---')} | السبب: {inv.get('refund_reason','---')}</span>", unsafe_allow_html=True)
-            with col_pos3: st.write(f"💵 الصافي: `{inv['total']:.2f} ج.م` | `{inv.get('payment','كاش')}`")
-            with col_pos_actions:
-                generate_receipt_pdf_trigger(inv, f"pos_sheet_{index}")
-                if inv.get("status", "Active") == "Active":
-                    pos_reason = st.text_input("سبب الكنسلة 📝", key=f"pos_reason_inp_{inv['id']}_{index}", placeholder="اكتب سبب إلغاء الفاتورة...")
-                    pos_cancel_worker = st.selectbox("الفني القائم بالكنسلة 👨‍🔧", options=["اختر الفني"] + worker_list, key=f"pos_worker_sel_{inv['id']}_{index}")
-                    
-                    if st.button("إرجاع الفاتورة ↩️", key=f"pos_refund_btn_{inv['id']}_{index}", use_container_width=True):
-                        if pos_reason.strip() == "":
-                            st.error("❌ خطأ: يرجى كتابة سبب الإلغاء أولاً!")
-                        elif pos_cancel_worker == "اختر الفني":
-                            st.error("❌ خطأ: يرجى اختيار الفني!")
-                        else:
-                            for w_key, w_invs in st.session_state.session_state_invoices.items():
-                                for item in w_invs:
-                                    if item["id"] == inv["id"]:
-                                        item["status"] = "Refunded"
-                                        item["refund_reason"] = pos_reason.strip()
-                                        item["cancelled_by"] = pos_cancel_worker
-                            save_system_data()
-                            st.rerun()
-                else:
-                    st.button("تم رد العملية 🔒", disabled=True, key=f"pos_dis_btn_{inv['id']}_{index}")
-    else:
-        st.info("ℹ️ لا توجد فواتير صادرة لليوم حتى الآن.")
+    st.divider()
+    st.subheader("📋 فواتير اليوم")
+    for i, inv in enumerate(invoices):
+        show_invoice_card(inv, "pos", i)
 
-elif menu == "تقرير الحسابات والأرشيف":
-    st.markdown("## 📉 تقرير الحسابات والأرشيف المالي الشامل")
-    st.write("---")
-    
-    st.subheader("📥 تحميل وطباعة أرشيف الحسابات كـ PDF")
-    archive_html_rows = ""
-    if st.session_state.daily_archive:
-        for day, day_data in st.session_state.daily_archive.items():
-            archive_html_rows += f"""
-            <tr>
-                <td>{day}</td>
-                <td>{day_data['sales']:.2f} ج.م</td>
-                <td>{day_data['expenses']:.2f} ج.م</td>
-                <td>{day_data['tax']:.2f} ج.م</td>
-                <td>{day_data['commissions']:.2f} ج.م</td>
-                <td>{day_data.get('cars_count', 0)}</td>
-                <td>{day_data.get('canceled_total', 0.0):.2f} ج.م</td>
-                <td>{day_data['net']:.2f} ج.م</td>
-            </tr>
-            """
-    else:
-        archive_html_rows = "<tr><td colspan='8' style='text-align:center;'>لا توجد أيام مغلقة ومؤرشفة حالياً في النظام</td></tr>"
 
-    archive_pdf_script = f"""
-    <script>
-    function printArchiveReport() {{
-        var win = window.open("", "", "height=700,width=1000");
-        win.document.write("<html><head><title>Sabiha Hub - تقرير الأرشيف المالي</title>");
-        win.document.write("<style>body{{font-family:sans-serif;direction:rtl;padding:20px;}} table{{width:100%;border-collapse:collapse;margin-top:20px;}} th,td{{border:1px solid #ddd;padding:10px;text-align:right;font-size:14px;}} th{{background-color:#f4f4f4;}}</style>");
-        win.document.write("</head><body>");
-        win.document.write("<h2>📉 تقرير أرشيف الحسابات المالي الشامل - Sabiha Hub</h2>");
-        win.document.write("<table><thead><tr><th>اليوم والتاريخ</th><th>إجمالي المبيعات</th><th>المصروفات</th><th>الضرائب 14%</th><th>عمولات الفنيين</th><th>عدد السيارات</th><th>الملغى</th><th>صافي الأرباح</th></tr></thead><tbody>");
-        win.document.write(`{archive_html_rows}`);
-        win.document.write("</tbody></table>");
-        win.document.close();
-        win.print();
-    }}
-    </script>
-    <button onclick="printArchiveReport()" style="background-color:#1E3A8A;color:white;padding:12px 24px;border:none;border-radius:6px;cursor:pointer;font-size:16px;width:100%;">📥 تحميل وطباعة تقرير الأرشيف الشامل كـ PDF</button>
-    """
-    st.components.v1.html(archive_pdf_script, height=60)
-    st.write("---")
-
-    tab_daily_arch, tab_monthly_arch = st.tabs(["📁 أرشيف الأيام المغلقة لليوم والشهر", "🗄️ أرشيف الحسابات الشهرية التراكمية"])
-    with tab_daily_arch:
+# =============================================================================
+# Reports and archives
+# =============================================================================
+elif page == "archive":
+    st.markdown("## 📉 تقرير الحسابات والأرشيف")
+    tab_days, tab_months = st.tabs(["📁 أرشيف الأيام", "🗄️ الأرشيف الشهري"])
+    with tab_days:
         if st.session_state.daily_archive:
-            for day, day_data in st.session_state.daily_archive.items():
-                with st.expander(f"📅 إغلاق يوم: {day} | صافي الأرباح: {day_data['net']:.2f} ج.م"):
-                    st.json(day_data)
+            for day, record in st.session_state.daily_archive.items():
+                with st.expander(f"{day} | صافي: {float(record.get('net', 0)):.2f} ج.م"):
+                    st.json(record)
         else:
-            st.info("ℹ️ أرشيف الأيام المغلقة فارغ حالياً.")
-    with tab_monthly_arch:
+            st.info("لا يوجد أرشيف أيام مغلقة.")
+    with tab_months:
         if st.session_state.monthly_archive:
-            st.json(st.session_state.monthly_archive)
+            for month, records in st.session_state.monthly_archive.items():
+                with st.expander(f"أرشيف شهر {month}"):
+                    st.json(records)
         else:
-            st.info("ℹ️ أرشيف الإغلاق المالي الشهري فارغ تماماً.")
+            st.info("لا يوجد أرشيف شهري.")
+    st.divider()
+    st.subheader("تنزيل كشف الأرشيف")
+    archive_rows = []
+    for day, record in st.session_state.daily_archive.items():
+        archive_rows.append({
+            "اليوم": day,
+            "المبيعات": record.get("sales", 0),
+            "المصروفات": record.get("expenses", 0),
+            "الضريبة": record.get("tax", 0),
+            "العمولات": record.get("commissions", 0),
+            "عدد السيارات": record.get("cars_count", 0),
+            "المرتجعات": record.get("canceled_total", 0),
+            "الصافي": record.get("net", 0),
+        })
+    archive_df = pd.DataFrame(archive_rows)
+    if not archive_df.empty:
+        st.dataframe(archive_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "تحميل الأرشيف CSV",
+            archive_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name="sabiha_archive.csv",
+            mime="text/csv",
+        )
+    else:
+        st.caption("لا توجد سجلات يومية قابلة للتنزيل حالياً.")
 
-elif menu == "العمولات والسلفيات الحية":
-    st.markdown("## 💸 إدارة عمولات وسلفيات الفنيين الحية وكشف الرواتب")
-    st.write("---")
-    
+
+# =============================================================================
+# Worker commissions and advances
+# =============================================================================
+elif page == "commissions":
+    st.markdown("## 💸 العمولات والسلفيات")
     for index, worker in enumerate(st.session_state.workers):
-        if not isinstance(worker, dict) or "name" not in worker: continue
-        w_name = worker["name"]
-        w_commissions = 0.0
-        if w_name in st.session_state.session_state_invoices:
-            for inv in st.session_state.session_state_invoices[w_name]:
-                if inv.get("status", "Active") == "Active":
-                    w_commissions += float(inv.get("commission_share", 0.0))
-        w_advance = float(worker.get("advance", 0.0))
-        net_payout = w_commissions - w_advance
-        
-        with st.expander(f"👨‍🔧 الفني: {w_name} | صافي المستحقات: {net_payout:.2f} ج.م"):
-            col_b1, col_b2, col_b3 = st.columns(3)
-            with col_b1: st.metric("🎯 إجمالي العمولات الموزعة", f"{w_commissions:.2f} ج.م")
-            with col_b2: st.metric("💸 السلفيات الحالية", f"{w_advance:.2f} ج.م")
-            with col_b3: st.metric("💰 صافي الراتب المستحق", f"{net_payout:.2f} ج.م")
-            
-            col_act1, col_act2 = st.columns(2)
-            with col_act1:
-                advance_amount = st.number_input(f"➕ تسجيل سلفة لـ {w_name}:", min_value=0.0, key=f"adv_add_{index}")
-                if st.button(f"تأكيد صرف السلفة 💸", key=f"btn_adv_{index}"):
-                    st.session_state.workers[index]["advance"] += advance_amount
-                    save_system_data()
-                    st.rerun()
-            with col_act2:
-                if st.button(f"تصفية حسابات [{w_name}] 🧾", key=f"btn_clear_{index}"):
-                    st.session_state.workers[index]["advance"] = 0.0
-                    if w_name in st.session_state.session_state_invoices:
-                        st.session_state.session_state_invoices[w_name] = []
-                    save_system_data()
-                    st.rerun()
+        if not isinstance(worker, dict) or not worker.get("name"):
+            continue
+        name = worker["name"]
+        worker_invoices = st.session_state.session_state_invoices.get(name, [])
+        earned = sum(
+            float(inv.get("commission_share", 0))
+            for inv in worker_invoices
+            if inv.get("status", "Active") == "Active"
+        )
+        advance = float(worker.get("advance", 0))
+        due = earned - advance
+        with st.expander(f"👨‍🔧 {name} | صافي المستحق الحالي: {due:.2f} ج.م"):
+            x, y, z = st.columns(3)
+            x.metric("العمولات", f"{earned:.2f} ج.م")
+            y.metric("السلف", f"{advance:.2f} ج.م")
+            z.metric("الصافي", f"{due:.2f} ج.م")
+            new_advance = st.number_input(
+                f"قيمة السلفة الجديدة لـ {name}",
+                min_value=0.0,
+                value=0.0,
+                key=f"advance_{index}",
+            )
+            if st.button("تسجيل السلفة", key=f"save_advance_{index}"):
+                st.session_state.workers[index]["advance"] = advance + new_advance
+                save_system_data()
+                st.success("تم تسجيل السلفة.")
+                st.rerun()
+            st.caption("تصفية الحساب هنا تسجل أن المستحق الحالي تم صرفه، مع الاحتفاظ بالفواتير.")
+            if st.button("تصفية المستحق الحالي", key=f"settle_{index}"):
+                # Keep historical invoices; reset the current advance balance only.
+                st.session_state.workers[index]["advance"] = earned
+                save_system_data()
+                st.success("تمت تصفية المستحق الحالي. احتفظ النظام بالفواتير.")
+                st.rerun()
 
-elif menu == "📑 دفتر المصروفات":
-    st.markdown("## 📑 إدارة دفتر المصروفات اليومية والتشغيلية")
-    st.write("---")
-    with st.form("expenses_form_production"):
-        rent_val = st.number_input("🏢 إيجار المقر والمحل (ج.م):", min_value=0.0, value=float(st.session_state.daily_expenses.get("rent", 0.0)))
-        operational_val = st.number_input("🧪 مصروفات تشغيلية:", min_value=0.0, value=float(st.session_state.daily_expenses.get("operational", 0.0)))
-        utilities_val = st.number_input("⚡💧 مرافق عامة وطاقة:", min_value=0.0, value=float(st.session_state.daily_expenses.get("utilities", 0.0)))
-        if st.form_submit_button("💾 حفظ وتثبيت قيم المصروفات"):
-            st.session_state.daily_expenses["rent"] = rent_val
-            st.session_state.daily_expenses["operational"] = operational_val
-            st.session_state.daily_expenses["utilities"] = utilities_val
-            save_system_data()
-            st.success("🎉 تم حفظ المصروفات!")
-            st.rerun()
 
-elif menu == "إعدادات الباقات والعمال":
-    st.markdown("## ⚙️ لوحة الإدارة المطلقة والتحكم بالأسعار والسرية")
-    st.write("---")
-    tab_workers, tab_services, tab_security = st.tabs(["👨‍🔧 إدارة العمال", "🛍️ الباقات والمنتجات والأسعار", "🔐 إدارة الحسابات والصلاحيات"])
-    
+# =============================================================================
+# Expenses
+# =============================================================================
+elif page == "expenses":
+    st.markdown("## 📑 دفتر المصروفات اليومية")
+    current = st.session_state.daily_expenses
+    with st.form("expenses_form"):
+        rent = st.number_input("🏢 الإيجار (ج.م)", min_value=0.0, value=float(current.get("rent", 0)))
+        operational = st.number_input(
+            "🧪 مصروفات تشغيلية (ج.م)",
+            min_value=0.0,
+            value=float(current.get("operational", 0)),
+        )
+        utilities = st.number_input(
+            "⚡ المرافق والطاقة (ج.م)",
+            min_value=0.0,
+            value=float(current.get("utilities", 0)),
+        )
+        submitted = st.form_submit_button("💾 حفظ المصروفات", use_container_width=True)
+    if submitted:
+        st.session_state.daily_expenses = {
+            "rent": rent,
+            "operational": operational,
+            "utilities": utilities,
+        }
+        save_system_data()
+        st.success("تم حفظ المصروفات.")
+        st.rerun()
+    st.metric("إجمالي مصروفات اليوم", f"{rent + operational + utilities:.2f} ج.م")
+
+
+# =============================================================================
+# Settings, workers, services, products, accounts and backup
+# =============================================================================
+elif page == "settings":
+    st.markdown("## ⚙️ إعدادات Sabiha Hub")
+    tab_workers, tab_prices, tab_accounts, tab_backup = st.tabs([
+        "👨‍🔧 العمال", "🛍️ الخدمات والمنتجات", "🔐 الحسابات والصلاحيات", "💾 النسخ الاحتياطي"
+    ])
+
     with tab_workers:
-        col_w1, col_w2 = st.columns(2)
-        with col_w1:
-            new_worker_name = st.text_input("➕ اسم الفني الجديد:", key="input_add_new_worker")
-            if st.button("تثبيت وحفظ الفني 🚀"):
-                if new_worker_name.strip() != "":
-                    st.session_state.workers.append({"name": new_worker_name.strip(), "advance": 0.0})
-                    save_system_data()
-                    st.rerun()
-        with col_w2:
-            worker_options = ["اختر فني لحذفه"] + [w["name"] for w in st.session_state.workers if isinstance(w, dict)]
-            worker_to_delete = st.selectbox("❌ حذف فني نهائياً:", options=worker_options)
-            if st.button("تأكيد حذف الفني 🗑️"):
-                if worker_to_delete != "اختر فني لحذفه":
-                    st.session_state.workers = [w for w in st.session_state.workers if w.get("name") != worker_to_delete]
-                    save_system_data()
-                    st.rerun()
-
-    with tab_services:
-        st.subheader("🎯 إعدادات عمولة الفنيين")
-        st.caption("تُحسب العمولة كنسبة من صافي قيمة الخدمة بعد الخصم، ثم تُقسّم بالتساوي على الفنيين المشاركين. لا تُحتسب عمولة على بيع المنتجات.")
-        col_rate, col_rate_btn = st.columns([2, 1])
-        with col_rate:
-            new_commission_rate = st.number_input("نسبة العمولة الإجمالية للخدمات (%):", min_value=0.0, max_value=100.0, value=float(st.session_state.commission_rate), step=0.5, key="global_commission_rate_input")
-        with col_rate_btn:
-            st.write("")
-            st.write("")
-            if st.button("💾 حفظ نسبة العمولة", key="save_global_commission_rate"):
-                st.session_state.commission_rate = float(new_commission_rate)
+        st.subheader("إضافة فني")
+        new_name = st.text_input("اسم الفني الجديد", key="new_worker_name")
+        if st.button("إضافة الفني"):
+            clean_name = new_name.strip()
+            if not clean_name:
+                st.error("اكتب اسم الفني.")
+            elif clean_name in [w.get("name") for w in st.session_state.workers]:
+                st.error("هذا الفني موجود بالفعل.")
+            else:
+                st.session_state.workers.append({"name": clean_name, "advance": 0.0})
                 save_system_data()
-                st.success("تم حفظ نسبة العمولة الجديدة")
+                st.success("تمت إضافة الفني.")
                 st.rerun()
-        st.write("---")
-        st.subheader("🛠️ إضافة باقة أو خدمة جديدة")
-        col_s1, col_s2, col_s3 = st.columns(3)
-        with col_s1: new_service_name = st.text_input("🏷️ اسم الخدمة:")
-        with col_s2: price_malaki = st.number_input("🚗 سعر الملاكي:", min_value=0.0, value=150.0)
-        with col_s3: price_suv = st.number_input("🚙 سعر SUV:", min_value=0.0, value=200.0)
-        fixed_comm_val = 0.0
-        if st.button("تثبيت باقة جديدة 📥"):
-            if new_service_name.strip() != "":
-                st.session_state.services[new_service_name.strip()] = {"الملكي": float(price_malaki), "SUV": float(price_suv), "fixed_commission": float(fixed_comm_val)}
-                save_system_data()
-                st.rerun()
-                
-        st.write("---")
-        st.subheader("✏️ تعديل أسعار وعمولة الخدمات الحالية")
-        selected_edit_s = st.selectbox("🎯 اختر الخدمة للتعديل:", options=["اختر خدمة"] + list(st.session_state.services.keys()))
-        if selected_edit_s != "اختر خدمة":
-            s_current_data = st.session_state.services[selected_edit_s]
-            col_ed1, col_ed2 = st.columns(2)
-            with col_ed1: updated_price_malaki = st.number_input("🚗 سعر الملاكي المحدث:", min_value=0.0, value=float(s_current_data.get("الملكي", 0.0)))
-            with col_ed2: updated_price_suv = st.number_input("🚙 سعر SUV المحدث:", min_value=0.0, value=float(s_current_data.get("SUV", 0.0)))
-            updated_fixed_comm = float(s_current_data.get("fixed_commission", 0.0))
-            if st.button(f"💾 حفظ الأسعار لـ [{selected_edit_s}]"):
-                st.session_state.services[selected_edit_s] = {"الملكي": updated_price_malaki, "SUV": updated_price_suv, "fixed_commission": updated_fixed_comm}
+        st.divider()
+        st.subheader("قائمة الفنيين")
+        for i, worker in enumerate(list(st.session_state.workers)):
+            col_a, col_b = st.columns([4, 1])
+            col_a.write(f"**{worker.get('name', '---')}**")
+            if col_b.button("حذف", key=f"delete_worker_{i}"):
+                worker_name = worker.get("name")
+                # Do not delete invoices; remove only worker from active staff list.
+                st.session_state.workers = [
+                    w for w in st.session_state.workers if w.get("name") != worker_name
+                ]
                 save_system_data()
                 st.rerun()
 
-        st.write("---")
-        st.subheader("📦 إضافة وتحديث المنتجات")
-        col_p1, col_p2 = st.columns(2)
-        with col_p1: new_prod_name = st.text_input("🏷️ اسم المنتج الجديد:")
-        with col_p2: price_prod = st.number_input("💰 سعر بيع المنتج:", min_value=0.0, value=30.0)
-        if st.button("تثبيت المنتج بالكاشير 📥"):
-            if new_prod_name.strip() != "":
-                st.session_state.products[new_prod_name.strip()] = float(price_prod)
-                save_system_data()
-                st.rerun()
-
-        st.write("---")
-        st.subheader("📋 كشف مسح البنود الحالية")
-        col_l1, col_l2 = st.columns(2)
-        with col_l1:
-            for s_name in list(st.session_state.services.keys()):
-                if st.button(f"حذف الخدمة: {s_name} 🗑️"):
-                    del st.session_state.services[s_name]
-                    save_system_data()
-                    st.rerun()
-        with col_l2:
-            for p_name in list(st.session_state.products.keys()):
-                if st.button(f"حذف المنتج: {p_name} 🗑️"):
-                    del st.session_state.products[p_name]
-                    save_system_data()
-                    st.rerun()
-
-    with tab_security:
-        st.subheader("🔐 إدارة الحسابات والصلاحيات الحية")
-        st.markdown("#### 👑 حساب المالك")
-        col_o_u, col_o_p = st.columns(2)
-        with col_o_u: new_owner_user = st.text_input("👤 اسم مستخدم المالك:", value=st.session_state.credentials["owner"]["username"])
-        with col_o_p: new_owner_pass = st.text_input("🔑 كلمة سر المالك الجديدة:", type="password", placeholder="اتركها فارغة لعدم التغيير")
-        if st.button("حفظ حساب المالك 💾"):
-            st.session_state.credentials["owner"]["username"] = new_owner_user.strip()
-            if new_owner_pass.strip() != "": st.session_state.credentials["owner"]["password"] = new_owner_pass.strip()
+    with tab_prices:
+        st.subheader("نسبة عمولة الخدمات")
+        st.caption("العمولة تُحسب من صافي الخدمة بعد الخصم، ثم تُقسم بالتساوي على الفنيين المشاركين. المنتجات بلا عمولة.")
+        rate = st.number_input(
+            "نسبة العمولة الإجمالية (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=float(st.session_state.commission_rate),
+            step=0.5,
+            key="commission_rate_edit",
+        )
+        if st.button("حفظ نسبة العمولة"):
+            st.session_state.commission_rate = float(rate)
             save_system_data()
-            st.success("✅ تم التحديث!")
+            st.success("تم حفظ نسبة العمولة.")
             st.rerun()
-            
-        st.write("---")
-        st.markdown("#### 👥 حسابات موظفي الكاشير والصلاحيات")
-        for w_user, w_data in list(st.session_state.credentials["workers_accounts"].items()):
-            st.warning(f"👤 الموظف: {w_data['name']} | الحساب: `{w_user}` | السر: `{w_data['password']}`")
-            updated_perms = st.multiselect(f"⚙️ صلاحيات صفحات [{w_data['name']}]:", options=all_possible_pages, default=w_data.get("permissions", []), key=f"live_edit_perms_{w_user}")
-            st.session_state.credentials["workers_accounts"][w_user]["permissions"] = updated_perms
-            if st.button("حذف الحساب ❌", key=f"del_acc_{w_user}"):
-                if len(st.session_state.credentials["workers_accounts"]) > 1:
-                    del st.session_state.credentials["workers_accounts"][w_user]
-                    save_system_data()
-                    st.rerun()
-                    
-        st.write("---")
-        st.markdown("##### ➕ إنشاء حساب كاشير/موظف جديد للسيستم:")
-        col_add_acc1, col_add_acc2, col_add_acc3 = st.columns(3)
-        with col_add_acc1: new_w_display_name = st.text_input("display name:")
-        with col_add_acc2: new_w_username = st.text_input("username:")
-        with col_add_acc3: new_w_password = st.text_input("password:")
-        new_worker_initial_perms = st.multiselect("صلاحيات الحساب الجديد:", options=all_possible_pages, default=["🛒 كاشير الاستقبال POS"])
-        
-        if st.button("إنشاء وتثبيت حساب الموظف الجديد 💾"):
-            if new_w_display_name.strip() != "" and new_w_username.strip() != "" and new_w_password.strip() != "":
-                w_user_id = new_w_username.strip().lower()
-                st.session_state.credentials["workers_accounts"][w_user_id] = {
-                    "name": new_w_display_name.strip(), "password": new_w_password.strip(), "role": "worker", "permissions": new_worker_initial_perms
+        st.divider()
+        st.subheader("إضافة خدمة")
+        s1, s2, s3 = st.columns(3)
+        with s1:
+            service_name = st.text_input("اسم الخدمة", key="new_service_name")
+        with s2:
+            price_sedan = st.number_input("سعر الملاكي", min_value=0.0, value=150.0, key="new_sedan")
+        with s3:
+            price_suv = st.number_input("سعر SUV", min_value=0.0, value=200.0, key="new_suv")
+        if st.button("إضافة الخدمة"):
+            name = service_name.strip()
+            if name:
+                st.session_state.services[name] = {
+                    "الملكي": float(price_sedan),
+                    "SUV": float(price_suv),
+                    "fixed_commission": 0.0,
                 }
                 save_system_data()
-                st.success("🎉 تم الحفظ الدائم للحساب الجديد!")
                 st.rerun()
+        st.divider()
+        if st.session_state.services:
+            edit_service = st.selectbox("اختر خدمة لتعديل أسعارها", list(st.session_state.services))
+            service_data = st.session_state.services[edit_service]
+            e1, e2 = st.columns(2)
+            with e1:
+                edit_sedan = st.number_input(
+                    "سعر الملاكي الحالي",
+                    min_value=0.0,
+                    value=float(service_data.get("الملكي", 0)),
+                    key=f"edit_sedan_{edit_service}",
+                )
+            with e2:
+                edit_suv = st.number_input(
+                    "سعر SUV الحالي",
+                    min_value=0.0,
+                    value=float(service_data.get("SUV", 0)),
+                    key=f"edit_suv_{edit_service}",
+                )
+            if st.button("حفظ أسعار الخدمة"):
+                st.session_state.services[edit_service] = {
+                    **service_data,
+                    "الملكي": float(edit_sedan),
+                    "SUV": float(edit_suv),
+                }
+                save_system_data()
+                st.rerun()
+            if st.button("حذف الخدمة المحددة"):
+                del st.session_state.services[edit_service]
+                save_system_data()
+                st.rerun()
+        st.divider()
+        st.subheader("إضافة منتج")
+        p1, p2 = st.columns(2)
+        with p1:
+            product_name = st.text_input("اسم المنتج", key="new_product_name")
+        with p2:
+            product_price = st.number_input("سعر المنتج", min_value=0.0, value=30.0, key="new_product_price")
+        if st.button("إضافة المنتج"):
+            name = product_name.strip()
+            if name:
+                st.session_state.products[name] = float(product_price)
+                save_system_data()
+                st.rerun()
+        if st.session_state.products:
+            remove_product = st.selectbox("حذف منتج", ["لا تحذف"] + list(st.session_state.products))
+            if remove_product != "لا تحذف" and st.button("تأكيد حذف المنتج"):
+                del st.session_state.products[remove_product]
+                save_system_data()
+                st.rerun()
+
+    with tab_accounts:
+        st.subheader("حساب المالك")
+        owner_username = st.text_input(
+            "اسم مستخدم المالك",
+            value=st.session_state.credentials["owner"].get("username", "owner"),
+        )
+        owner_password = st.text_input(
+            "كلمة مرور جديدة (اتركها فارغة دون تغيير)",
+            type="password",
+            key="owner_new_password",
+        )
+        if st.button("حفظ بيانات المالك"):
+            if owner_username.strip():
+                st.session_state.credentials["owner"]["username"] = owner_username.strip()
+            if owner_password.strip():
+                st.session_state.credentials["owner"]["password"] = owner_password.strip()
+            save_system_data()
+            st.success("تم تحديث بيانات المالك. سجّل الخروج ثم ادخل بالبيانات الجديدة.")
+        st.divider()
+        st.subheader("حسابات الموظفين")
+        accounts = st.session_state.credentials.setdefault("workers_accounts", {})
+        for uid, account in list(accounts.items()):
+            with st.expander(f"{account.get('name', uid)} ({uid})"):
+                st.caption("كلمة المرور مخفية. لا تشارك بيانات الدخول مع أي شخص غير مصرح له.")
+                display_name = st.text_input(
+                    "اسم الموظف",
+                    value=account.get("name", uid),
+                    key=f"acc_name_{uid}",
+                )
+                new_password = st.text_input(
+                    "تغيير كلمة المرور (اختياري)",
+                    type="password",
+                    key=f"acc_password_{uid}",
+                )
+                perms = st.multiselect(
+                    "الصلاحيات",
+                    PAGES,
+                    default=[p for p in account.get("permissions", []) if p in PAGES],
+                    key=f"acc_perms_{uid}",
+                )
+                if st.button("حفظ حساب الموظف", key=f"save_acc_{uid}"):
+                    account["name"] = display_name.strip() or uid
+                    account["permissions"] = perms
+                    if new_password.strip():
+                        account["password"] = new_password.strip()
+                    save_system_data()
+                    st.success("تم تحديث الحساب.")
+                    st.rerun()
+                if st.button("حذف الحساب", key=f"delete_acc_{uid}"):
+                    if len(accounts) <= 1:
+                        st.error("يجب الاحتفاظ بحساب موظف واحد على الأقل.")
+                    else:
+                        del accounts[uid]
+                        save_system_data()
+                        st.rerun()
+        st.divider()
+        st.subheader("إنشاء حساب موظف")
+        n1, n2, n3 = st.columns(3)
+        with n1:
+            display = st.text_input("اسم الموظف الجديد", key="create_display")
+        with n2:
+            username = st.text_input("اسم المستخدم الجديد", key="create_username")
+        with n3:
+            password = st.text_input("كلمة المرور الجديدة", type="password", key="create_password")
+        permissions = st.multiselect(
+            "صلاحيات الموظف الجديد",
+            PAGES,
+            default=["🛒 كاشير الاستقبال POS"],
+            key="create_permissions",
+        )
+        if st.button("إنشاء حساب الموظف"):
+            uid = username.strip().lower()
+            if not display.strip() or not uid or not password.strip():
+                st.error("أكمل الاسم واسم المستخدم وكلمة المرور.")
+            elif uid in accounts:
+                st.error("اسم المستخدم مستخدم بالفعل.")
+            else:
+                accounts[uid] = {
+                    "name": display.strip(),
+                    "password": password.strip(),
+                    "role": "worker",
+                    "permissions": permissions,
+                }
+                save_system_data()
+                st.success("تم إنشاء الحساب.")
+                st.rerun()
+
+    with tab_backup:
+        st.subheader("نسخة احتياطية من بيانات النظام")
+        st.warning(
+            "ملف JSON المحلي على Streamlit Community Cloud قد لا يبقى بعد إعادة إنشاء بيئة التشغيل. "
+            "نزّل نسخة احتياطية بانتظام واحتفظ بها خارج الموقع."
+        )
+        backup_payload = {
+            "credentials": st.session_state.credentials,
+            "workers": st.session_state.workers,
+            "commission_rate": st.session_state.commission_rate,
+            "services": st.session_state.services,
+            "products": st.session_state.products,
+            "session_state_invoices": st.session_state.session_state_invoices,
+            "daily_sales": st.session_state.daily_sales,
+            "daily_expenses": st.session_state.daily_expenses,
+            "daily_archive": st.session_state.daily_archive,
+            "monthly_archive": st.session_state.monthly_archive,
+        }
+        st.download_button(
+            "⬇️ تنزيل نسخة احتياطية JSON",
+            json.dumps(backup_payload, ensure_ascii=False, indent=2).encode("utf-8"),
+            file_name=f"sabiha_backup_{dt.date.today()}.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+        uploaded_backup = st.file_uploader("استعادة نسخة JSON احتياطية", type=["json"])
+        confirm_restore = st.checkbox("أؤكد استبدال بيانات النظام الحالية بالنسخة المرفوعة")
+        if st.button("استعادة النسخة الاحتياطية", disabled=not (uploaded_backup and confirm_restore)):
+            try:
+                imported = json.load(uploaded_backup)
+                merged = deep_merge(default_data(), imported)
+                for key in [
+                    "credentials", "workers", "commission_rate", "services", "products",
+                    "session_state_invoices", "daily_sales", "daily_expenses",
+                    "daily_archive", "monthly_archive",
+                ]:
+                    st.session_state[key] = merged[key]
+                save_system_data()
+                st.success("تمت استعادة النسخة الاحتياطية.")
+                st.rerun()
+            except (json.JSONDecodeError, TypeError, KeyError) as error:
+                st.error(f"ملف النسخة الاحتياطية غير صالح: {error}")
+
+
+# =============================================================================
+# Security and persistence reminders
+# =============================================================================
+if st.session_state.user_role == "owner":
+    with st.sidebar.expander("ℹ️ تنبيهات مهمة"):
+        st.caption(
+            "غيّر كلمات المرور الافتراضية فوراً. لا تضع كلمات مرور حقيقية داخل ملف GitHub العام. "
+            "للاستخدام الفعلي، انقل كلمات المرور إلى Streamlit Secrets واستخدم تخزيناً دائماً خارج "
+            "ملفات التشغيل المحلية."
+        )
