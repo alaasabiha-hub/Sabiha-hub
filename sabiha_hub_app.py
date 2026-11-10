@@ -439,11 +439,12 @@ invoice_data = {
 }
 st.session_state.invoices.append(invoice_data)
 # تحديث محفظة عمولات الفني مباشرة بالنظام
-for w in st.session_state.workers:
-if w["name"] == active_worker:
-w["commission_rate"] += commission_value
-st.success(f"✅ تم إصدار الفاتورة رقم #{new_invoice_id} وإدراجها بنجاح!")
-st.rerun()
+        for w in st.session_state.workers:
+            if w["name"] == selected_worker:
+                w["commission_rate"] += commission
+        st.success(f"🎉 تم تسجيل الفاتورة #{new_id} بنجاح بقيمة {price} ج.م!")
+        st.rerun()
+
 
 =========================================================================
 
