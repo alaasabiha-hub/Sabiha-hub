@@ -237,62 +237,49 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     cancelled_inv = [inv for inv in st.session_state.invoices if inv["status"] == "ملغاة"]
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
-    visa_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "") == "فيزا")
-    
-    total_sales = cash_sales + visa_sales
-    tax_amount = total_sales * 0.14
-    worker_commissions = sum(inv["amount"] * 0.10 for inv in active_inv if inv.get("has_commission", True))
-    net_profit = total_sales - tax_amount - worker_commissions
-    total_cancelled_sum = sum(inv["amount"] for inv in cancelled_inv)
+            # --- قسم الأداء المالي والتصنيفات ---
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            st.metric("إجمالي المبيعات", f"{total_sales} ج.م")
+        with col_b:
+            st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
+        with col_c:
+            st.metric("مبيعات الفيزا", f"{visa_sales} ج.م")
 
-    # عرض جميع العدادات الخمسة بشكل رأسي واضح
-    col_c = st.columns(1)
-    with col_c:
-        st.markdown(f'<div class="finance-card"><div class="card-title">💰 إجمالي المبيعات والدخل اليومي</div><div class="card-value-green">{total_sales} ج.م (كاش: {cash_sales} | فيزا: {visa_sales})</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="finance-card"><div class="card-title">📜 الضريبة العامة (14%)</div><div class="card-value-green">{tax_amount:.2f} ج.م</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="finance-card"><div class="card-title">👥 إجمالي عمولات العمال اليومية</div><div class="card-value-green">{worker_commissions:.2f} ج.م</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="finance-card" style="border:2px solid #64FFDA;"><div class="card-title" style="color:#64FFDA;">📈 صافي الأرباح الفعلي</div><div class="card-value-gold">{net_profit:.2f} ج.م</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="finance-card" style="border:2px solid #D32F2F;"><div class="card-title" style="color:#D32F2F;">❌ مجموع حساب العمليات الملغاة</div><div class="card-value-green" style="color:#FF5252 !important;">{total_cancelled_sum} ج.م</div></div>', unsafe_allow_html=True)
-
-    st.write("---")
-    st.subheader("🏁 إنهاء اليوم وترحيل الحسابات للأرشيف")
-    if st.button("🔒 تقفيل الوردية وترحيل الوردية الحالية أوتوماتيكياً"):
-        if any(report["date"] == current_date_str for report in st.session_state.daily_reports):
-            st.warning("⚠️ هذا اليوم مغلق ومرحّل مسبقاً!")
-        else:
-            st.session_state.daily_reports.append({
-                "date": current_date_str, "month": current_month_str, "day_name": current_day_ar,
-                "cash": cash_sales, "visa": visa_sales, "total": total_sales, "tax": tax_amount,
-                "commissions": worker_commissions, "net_profit": net_profit, "cancelled_total": total_cancelled_sum
-            })
-
-save_data(daily_reports_file, st.session_state.daily_reports)
-st.success("🎉 تم ترحيل أداء اليوم بنجاح إلى الأرشيف!")
-st.rerun()
 st.write("---")
 st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
-st.write("---")
-st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
-for inv in st.session_state.invoices:
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.write(f"#{inv['id']} - {inv['customer']}")
-    with c2:
-        st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
-    with c3:
-        if inv.get('status') != 'cancelled':
-            if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
-                inv['status'] = 'cancelled'
-                inv['amount'] = 0
-                st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
+
+if "invoices" in st.session_state and st.session_state.invoices:
+    for inv in st.session_state.invoices:
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.write(f"#{inv['id']} - {inv['customer']}")
+        with c2:
+            st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
+        with c3:
+            if inv.get('status') != 'cancelled':
+                if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
+                    inv['status'] = 'cancelled'
+                    inv['amount'] = 0
+                    st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
+                    st.rerun()
+            else:
+                st.warning("ملغاة ❌")
+        with c4:
+            if st.button("حذف نهائي", key=f"del_{inv['id']}"):
+                st.session_state.invoices.remove(inv)
+                st.success("تم الحذف بنجاح!")
                 st.rerun()
-        else:
-            st.warning("ملغاة ❌")
-    with c4:
-        if st.button("حذف نهائي", key=f"del_{inv['id']}"):
-            st.session_state.invoices.remove(inv)
-            st.success("تم الحذف بنجاح!")
-            st.rerun()
+else:
+    st.info("لا توجد فواتير مسجلة اليوم.")
 
+# --- إصلاح وإظهار نصوص القائمة الجانبية (Sidebar) ---
+st.sidebar.markdown("""
+    <style>
+        [data-testid="stSidebar"] {
+            color: #ffffff; /* جعل الخط باللون الأبيض ليظهر بوضوح */
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 
