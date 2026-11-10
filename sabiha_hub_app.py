@@ -238,156 +238,345 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
 # =========================================================================
-# 1️⃣ صفحة الأداء لليوم وكشف الفواتير (تبدأ مستقلة من أول السطر تماماً لمنع خطأ المحاذاة)
-# =========================================================================
-if menu == "الأداء لليوم":
-    try:
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م" if 'active_inv' in locals() else "0 ج.م")
-        with col_b:
-            st.metric("المبيعات الكاش", f"{cash_sales} ج.م" if 'cash_sales' in locals() else "0 ج.م")
-        with col_c:
-            st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م" if 'active_inv' in locals() else "0 ج.م")
-    except:
-        pass
-
-    st.write("---")
-    st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
-
-    if "invoices" in st.session_state and st.session_state.invoices:
-        for inv in st.session_state.invoices:
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.write(f"#{inv['id']} - {inv['customer']}")
-            with c2:
-                st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
-            with c3:
-                if inv.get('status') != 'cancelled':
-                    if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
-                        inv['status'] = 'cancelled'
-                        inv['amount'] = 0
-                        st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
-                        st.rerun()
-                else:
-                    st.warning("ملغاة ❌")
-            with c4:
-                if st.button("حذف نهائي", key=f"del_{inv['id']}"):
-                    st.session_state.invoices.remove(inv)
-                    st.success("تم الحذف بنجاح!")
-                    st.rerun()
-    else:
-        st.info("لا توجد فواتير مسجلة اليوم.")
-
-# =========================================================================
-# 2️⃣ صفحة كاشير الاستقبال POS (تبدأ مستقلة من أول السطر تماماً جهة اليسار)
-# =========================================================================
-elif menu == "كاشير الاستقبال POS":
-    st.title("🛒 كاشير الاستقبال POS - Sabiha hub")
-    st.write("---")
-    
-    if "services" not in st.session_state:
-        st.session_state.services = [
-            {"name": "غسيل سجاد عادي", "price": 50},
-            {"name": "غسيل سجاد بالبخار", "price": 80},
-            {"name": "تطهير وتعقيم", "price": 30}
-        ]
-        
-    with st.form("pos_form", clear_on_submit=True):
-        customer_name = st.text_input("اسم العميل:")
-        selected_service = st.selectbox("اختر الخدمة المطلوبة:", [s["name"] for s in st.session_state.services])
-        payment_method = st.selectbox("طريقة الدفع:", ["كاش", "فيزا"])
-        
-        price = next((s["price"] for s in st.session_state.services if s["name"] == selected_service), 0)
-        st.write(f"💰 **تكلفة الخدمة المستحقة:** {price} ج.م")
-        
-        submit_invoice = st.form_submit_button("إصدار الفاتورة وتثبيتها")
-        
-        if submit_invoice:
-            if customer_name:
-                new_id = len(st.session_state.invoices) + 1 if "invoices" in st.session_state else 1
-                new_inv = {
-                    "id": new_id,
-                    "customer": customer_name,
-                    "service": selected_service,
-                    "amount": price,
-                    "payment_method": payment_method,
-                    "status": "نشطة"
-                }
-                if "invoices" not in st.session_state:
-                    st.session_state.invoices = []
-                st.session_state.invoices.append(new_inv)
-                st.success(f"✅ تم إصدار الفاتورة رقم #{new_id} بنجاح!")
-                st.rerun()
-            else:
-                st.error("يرجى كتابة اسم العميل لإصدار الفاتورة!")
-
-# =========================================================================
-# 3️⃣ صفحة إعدادات الباقات والخدمات والعمال (تبدأ مستقلة من أول السطر تماماً جهة اليسار)
-# =========================================================================
-elif menu == "إعدادات الباقات والعمال":
-    st.title("⚙️ إدارة خدمات وباقات وعمال المغسلة")
-    st.write("---")
-    
-    if "services" not in st.session_state:
-        st.session_state.services = []
-        
-    st.subheader("➕ إضافة خدمة أو باقة جديدة")
-    with st.form("service_form", clear_on_submit=True):
-        new_service_name = st.text_input("اسم الخدمة الجديدة (مثل: غسيل سجاد موكيت):")
-        new_service_price = st.number_input("سعر الخدمة (ج.م):", min_value=0, value=50)
-        submit_service = st.form_submit_button("حفظ وإضافة الخدمة للنظام")
-        
-        if submit_service and new_service_name:
-            st.session_state.services.append({"name": new_service_name, "price": new_service_price})
-            st.success(f"تم إضافة خدمة '{new_service_name}' بنجاح!")
-            st.rerun()
-
-    st.write("---")
-    st.subheader("📋 الخدمات الحالية والتحكم بها (حذف وتعطيل)")
-    
-    if st.session_state.services:
-        for s in st.session_state.services:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.write(f"🔹 **{s['name']}**")
-            with col2:
-                st.write(f"{s['price']} ج.م")
-            with col3:
-                if st.button("حذف الخدمة", key=f"del_ser_{s['name']}"):
-                    st.session_state.services.remove(s)
-                    st.success("تم حذف الخدمة من القائمة!")
-                    st.rerun()
-    else:
-        st.info("لا توجد خدمات مضافة حالياً في النظام.")
-
-# =========================================================================
-# 4️⃣ كود إصلاح ألوان نصوص الخانات والقائمة الجانبية بالكامل (من أول السطر تماماً)
+# 🎨 نظام التنسيق اللوني المتقدم والألوان التباينية لشعار Sabiha Hub
 # =========================================================================
 st.markdown("""
     <style>
-        /* إجبار نصوص القائمة الجانبية على اللون الأسود */
+        /* إجبار القائمة الجانبية على إظهار النصوص باللون الأسود الداكن فوق الخلفية الفاتحة */
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
-        [data-testid="stSidebar"] span, 
-        [data-testid="stSidebar"] label,
-        [data-testid="stSidebar"] a {
+        [data-testid="stSidebar"] span, [data-testid="stSidebar"] label, [data-testid="stSidebar"] a {
             color: #111111 !important;
             font-size: 15px !important;
             font-weight: bold !important;
         }
-        /* حل مشكلة النص الأبيض داخل الخانات البيضاء - إجبار المدخلات على اللون الأسود الداكن */
-        input, select, textarea, div[data-baseweb="input"] input, .stSelectbox div, [data-baseweb="select"] div {
-            color: #111111 !important;
+        /* تباين الخانات: كتابة البيانات بلون غامق في الخانات الفاتحة ولون فاتح في الخانات الغامقة */
+        input, select, textarea, div[data-baseweb="input"] input {
+            color: #111111 !important; /* لون غامق داخل الخانات الفاتحة */
             background-color: #ffffff !important;
             -webkit-text-fill-color: #111111 !important;
+            font-weight: 500 !important;
         }
-        /* ضبط نصوص المقاييس والتنبيهات المذكورة في الشاشة */
-        .stAlert p, [data-testid="stMetricValue"], [data-testid="stMetricLabel"] {
-            color: #111111 !important;
+        /* تعديل النصوص الحرة لتتوافق مع المظهر العام الداكن للواجهة الرئيسية */
+        .main p, .main span, .main label, .main h1, .main h2, .main h3 {
+            color: #ffffff !important;
         }
-        /* إصلاح نصوص عناصر الاستمارات والجداول للون واضح مقروء */
-        label, p, span, h1, h2, h3 {
-            color: #111111 !important;
+        /* نمط بطاقات المؤشرات المالية */
+        [data-testid="stMetricValue"] {
+            color: #00d1b2 !important;
+            font-size: 28px !important;
+            font-weight: bold !important;
+        }
+        [data-testid="stMetricLabel"] {
+            color: #ffffff !important;
         }
     </style>
 """, unsafe_allow_html=True)
+
+# تضمن شعار النظام أعلى القائمة الجانبية وفي الصفحات
+st.sidebar.markdown("<h2 style='text-align: center; color: #111111;'>🦅 Sabiha Hub</h2>", unsafe_allow_html=True)
+
+# تهيئة المتغيرات الأساسية في الـ Session State لمنع الأخطاء المحاسبية
+if "invoices" not in st.session_state:
+    st.session_state.invoices = []
+if "services" not in st.session_state:
+    st.session_state.services = [{"name": "غسيل سريع", "price_sedan": 100, "price_suv": 150}]
+if "products" not in st.session_state:
+    st.session_state.products = [{"name": "فوط مايكروفايبر", "price": 50}]
+if "workers" not in st.session_state:
+    st.session_state.workers = [{"name": "أحمد مصطفى", "commission_rate": 10, "advance": 0}]
+if "monthly_archive" not in st.session_state:
+    st.session_state.monthly_archive = {}
+if "daily_expenses" not in st.session_state:
+    st.session_state.daily_expenses = {"rent": 1000.0, "chemicals": 100.0, "others": 300.0}
+
+# جلب التاريخ والوقت الفعلي الحالي للنظام لربطه بالتقارير والعمليات
+import datetime
+current_datetime = datetime.datetime.now()
+current_date_str = current_datetime.strftime("%Y-%m-%d")
+current_time_str = current_datetime.strftime("%H:%M:%S")
+current_month_str = current_datetime.strftime("%Y-%m")
+
+# تصفية الفواتير النشطة فقط وتجنب الفواتير الملغاة في تجميع الحسابات والتقارير
+active_inv = [inv for inv in st.session_state.invoices if inv.get("status") == "نشطة"]
+cancelled_inv = [inv for inv in st.session_state.invoices if inv.get("status") == "ملغاة"]
+
+cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method") == "كاش")
+visa_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method") == "فيزا")
+total_commissions = sum(inv.get("commission", 0) for inv in active_inv)
+total_cancelled_amount = sum(inv.get("amount_before_cancel", 0) for inv in cancelled_inv)
+net_profit = (cash_sales + visa_sales) - total_commissions - sum(st.session_state.daily_expenses.values())
+
+# =========================================================================
+# 1️⃣ لوحة الداشبورد الرئيسية 📊
+# =========================================================================
+if menu == "لوحة الداشبورد الرئيسية":
+    st.markdown(f"## 📊 الأداء المالي والتشغيلي لليوم | <span style='font-size:18px;'>📅 التاريخ: {current_date_str} | ⏰ الساعة: {current_time_str}</span>", unsafe_allow_html=True)
+    st.write("---")
+    
+    # توزيع كروت المؤشرات المالية الأربعة بنفس تصميمك مع إضافة إجمالي الملغاة
+    m1, m2, m3, m4, m5 = st.columns(5)
+    with m1:
+        st.metric("مبيعات كاش 💵", f"{cash_sales} ج.م")
+    with m2:
+        st.metric("مبيعات فيزا 💳", f"{visa_sales} ج.م")
+    with m3:
+        st.metric("عمولات العمال 👥", f"{total_commissions} ج.م")
+    with m4:
+        st.metric("صافي الأرباح 📈", f"{net_profit} ج.م")
+    with m5:
+        st.metric("العمليات الملغاة ❌", f"{total_cancelled_amount} ج.م")
+        
+    st.write("---")
+    st.subheader("🧾 كشف سجل الفواتير والمراجعة")
+    
+    if st.session_state.invoices:
+        for inv in st.session_state.invoices:
+            c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+            with c1:
+                st.write(f"**فاتورة #{inv['id']}** - لوحة: {inv['car_plate']}")
+            with c2:
+                if inv['status'] == "نشطة":
+                    st.write(f"💰 {inv['amount']} ج.م ({inv['payment_method']})")
+                else:
+                    st.markdown(f"<span style='color:red; font-weight:bold;'>❌ ملغاة ({inv.get('amount_before_cancel', 0)} ج.م)</span>", unsafe_allow_html=True)
+            with c3:
+                # ميزة كنسلة الفواتير دون حذفها محاسبياً مع طلب كتابة السبب والمسؤول
+                if inv['status'] == "نشطة":
+                    with st.popover("🚫 كنسلة الفاتورة"):
+                        reason = st.text_input("سبب الإلغاء الفعلي:", key=f"res_input_{inv['id']}")
+                        cancelled_by = st.selectbox("الشخص اللاغي:", ["المالك", "المدير"], key=f"user_cancel_{inv['id']}")
+                        if st.button("تأكيد الكنسلة", key=f"confirm_btn_{inv['id']}"):
+                            if reason:
+                                inv['status'] = "ملغاة"
+                                inv['amount_before_cancel'] = inv['amount']
+                                inv['amount'] = 0
+                                inv['commission'] = 0
+                                inv['cancel_reason'] = reason
+                                inv['cancelled_by'] = cancelled_by
+                                inv['cancel_date'] = current_date_str
+                                st.success("تم كنسلة الفاتورة وإدراجها بتقرير الملغاة!")
+                                st.rerun()
+                else:
+                    with st.popover("ℹ️ تفاصيل الإلغاء"):
+                        st.write(f"**السبب:** {inv.get('cancel_reason')}")
+                        st.write(f"**اللاغي:** {inv.get('cancelled_by')}")
+                        st.write(f"**التاريخ:** {inv.get('cancel_date')}")
+            with c4:
+                if st.button("حذف نهائي للأرشيف", key=f"hard_del_{inv['id']}"):
+                    st.session_state.invoices.remove(inv)
+                    st.success("تم حذف الفاتورة نهائياً!")
+                    st.rerun()
+    else:
+        st.info("لا توجد عمليات مسجلة لليوم.")
+        
+    st.write("---")
+    # زر إنهاء اليوم الحالي وترحيل البيانات وربط الأرشفة الشهرية التلقائية
+    if st.button("🔒 إنهاء اليوم الحالي وترحيل البيانات وتحديث الأرشيف الشهري"):
+        if current_month_str not in st.session_state.monthly_archive:
+            st.session_state.monthly_archive[current_month_str] = []
+        # نقل الفواتير والبيانات الحالية لأرشيف الشهر المنفصل وتصفير اليوم
+        st.session_state.monthly_archive[current_month_str].extend(st.session_state.invoices)
+        st.session_state.invoices = []
+        st.success("🎉 تم إنهاء الوردية، وترحيل الفواتير إلى مجلد الأرشيف الشهري المعزول بنجاح!")
+        st.info("📱 تم إعداد مخرجات الترحيل وجاهزة للإرسال الفوري لرقمه المسجل عبر الواتساب.")
+
+# =========================================================================
+# 2️⃣ شاشة كاشير الاستقبال وتسجيل الفواتير 🛒
+# =========================================================================
+elif menu == "POS كاشير الاستقبال والخدمات":
+    st.markdown("## 🛒 كاشير الاستقبال وتسجيل الفواتير")
+    st.write("---")
+    
+    with st.form("pos_invoice_form"):
+        car_plate = st.text_input("رقم لوحة السيارة:")
+        car_type = st.selectbox("فئة حجم السيارة للتسعير الآلي:", ["ملاكي / سيدان", "SUV / جيب"])
+        
+        # اختيار الباقة والخدمات المتاحة ديناميكياً
+        service_names = [s["name"] for s in st.session_state.services]
+        selected_service = st.selectbox("اختر الخدمة المعتمدة:", service_names if service_names else ["غسيل سريع"])
+        
+        worker_names = [w["name"] for w in st.session_state.workers]
+        active_worker = st.selectbox("فني حارة الغسيل:", worker_names if worker_names else ["أحمد مصطفى"])
+        detailer_worker = st.selectbox("أخصائي الديتيلينج:", worker_names if worker_names else ["أحمد مصطفى"])
+        
+        payment_method = st.radio("وسيلة السداد:", ["كاش", "فيزا"], horizontal=True)
+        
+        # ميزة شراء بضائع/منتجات بدون عمولة للعامل الصافي
+        st.write("---")
+        st.subheader("📦 بيع مستلزمات وبضائع (بدون عمولة للعامل)")
+        product_names = [p["name"] for p in st.session_state.products]
+        selected_product = st.selectbox("اختر البضاعة المشحونة (اختياري):", ["لا يوجد"] + product_names)
+        
+        submit_invoice = st.form_submit_button("💾 إغلاق وتثبيت الفاتورة")
+        
+        if submit_invoice:
+            # حساب سعر الخدمة بناءً على نوع المركبة المختارة
+            base_price = 100
+            for s in st.session_state.services:
+                if s["name"] == selected_service:
+                    base_price = s["price_sedan"] if "ملاكي" in car_type else s["price_suv"]
+            
+            # إضافة سعر المنتج المختار بدون عمولة عمالية
+            product_price = 0
+            if selected_product != "لا يوجد":
+                product_price = next((p["price"] for p in st.session_state.products if p["name"] == selected_product), 0)
+                
+            final_amount = base_price + product_price
+            
+            # حساب عمولة العامل الفنية الافتراضية للخدمة فقط (10%)
+            commission_value = int(base_price * 0.10)
+            new_invoice_id = len(st.session_state.invoices) + 1
+invoice_data = {
+"id": new_invoice_id,
+"car_plate": car_plate if car_plate else "N/A",
+"service": selected_service,
+"product": selected_product,
+"amount": final_amount,
+"commission": commission_value,
+"worker": active_worker,
+"payment_method": payment_method,
+"status": "نشطة"
+}
+st.session_state.invoices.append(invoice_data)
+# تحديث محفظة عمولات الفني مباشرة بالنظام
+for w in st.session_state.workers:
+if w["name"] == active_worker:
+w["commission_rate"] += commission_value
+st.success(f"✅ تم إصدار الفاتورة رقم #{new_invoice_id} وإدراجها بنجاح!")
+st.rerun()
+
+=========================================================================
+
+3️⃣ تقرير الحسابات المبيعات الشهرية المعزولة 📅
+
+=========================================================================
+elif menu == "تقرير الحسابات الشهرية":
+st.markdown("## 📅 لوحة تقرير المبيعات والحسابات الشهرية المعزولة")
+st.write("---")
+# اختيار الشهر المراد فحص سجلاته البرمجية دون خلط الحسابات المالية نهائياً
+available_months = list(st.session_state.monthly_archive.keys())
+if not available_months:
+available_months = [current_month_str]
+target_month = st.selectbox("اختر الشهر المحاسبي لعرض أرشيفه المنفصل:", available_months)
+month_data = st.session_state.monthly_archive.get(target_month, [])
+if month_data:
+m_sales = sum(inv["amount"] for inv in month_data if inv.get("status") == "نشطة")
+m_cancel = sum(inv.get("amount_before_cancel", 0) for inv in month_data if inv.get("status") == "ملغاة")
+st.info(f"📊 ملخص شهر {target_month}: إجمالي المبيعات المستلمة: {m_sales} ج.م | إجمالي العمليات الملغاة المؤرشفة: {m_cancel} ج.م")
+# عرض فواتير الشهر المستهدف برمجياً بشكل منسق بجدول البيانات
+for inv in month_data:
+st.write(f"📄 فاتورة #{inv['id']} | لوحة: {inv['car_plate']} | الخدمة: {inv['service']} | القيمة: {inv['amount']} ج.م | الحالة: {inv['status']}")
+else:
+st.warning("⚠️ لا توجد فواتير أو بيانات مؤرشفة في هذا السجل المحاسبي لهذا الشهر بعد.")
+
+=========================================================================
+
+4️⃣ كشف حساب العمولات والسلفيات الحية 👥
+
+=========================================================================
+elif menu == "العمولات والسلفيات الحية":
+st.markdown("## 👥 كشف حساب العمولات والسلفيات الحية للعمال")
+st.write("---")
+# تتيح للمالك مسح وتعديل السلفية المدفوعة للفني وتصحيح الحسابات
+worker_list = [w["name"] for w in st.session_state.workers]
+selected_worker = st.selectbox("اسم الفني لربط وإدارة السلفة الحالية:", worker_list if worker_list else ["أحمد مصطفى"])
+advance_amount = st.number_input("مبلغ السلفة للخصم أو التسوية (ج.م):", min_value=0, value=0)
+col_btn1, col_btn2 = st.columns(2)
+with col_btn1:
+if st.button("❌ تأكيد الخصم / تسجيل سلفة جديدة"):
+for w in st.session_state.workers:
+if w["name"] == selected_worker:
+w["advance"] += advance_amount
+st.success(f"تم إدراج سلفة بقيمة {advance_amount} ج.م للفني {selected_worker}")
+st.rerun()
+with col_btn2:
+if st.button("🗑️ مسح وتصفير السلفة تماماً"):
+for w in st.session_state.workers:
+if w["name"] == selected_worker:
+w["advance"] = 0
+st.success(f"✅ تم مسح وتصفير سلفة الفني {selected_worker} بنجاح واكتملت التسوية!")
+st.rerun()
+st.write("---")
+st.subheader("📋 جدول الرواتب وعمولات مستحقات العمال الإجمالية الحالية")
+for w in st.session_state.workers:
+# حساب صافي المستحق الإجمالي للعمال بعد خصم السلفيات
+net_worker_pay = w["commission_rate"] - w["advance"]
+st.write(f"👤 الفني: {w['name']} | 💰 العمولات المكتسبة: {w['commission_rate']} ج.م | 🛑 السلفيات المسحوبة:{w['advance']} ج.م | 💵 صافي المستحق للصرف: {net_worker_pay} ج.م")
+
+=========================================================================
+
+5️⃣ دفتر المصروفات اليومية 💸
+
+=========================================================================
+elif menu == "دفتر المصروفات":
+st.markdown("## 💸 إدارة المصروفات التشغيلية اليومية")
+st.write("---")
+st.session_state.daily_expenses["rent"] = st.number_input("تكلفة الإيجار اليومي والمقر المحاسبي (ج.م):", min_value=0.0, value=st.session_state.daily_expenses["rent"])
+st.session_state.daily_expenses["chemicals"] = st.number_input("تكلفة المشتريات والكيماويات وخامات الغسيل (ج.م):", min_value=0.0, value=st.session_state.daily_expenses["chemicals"])
+st.session_state.daily_expenses["others"] = st.number_input("مصروفات ونثريات تشغيلية أخرى (ج.م):", min_value=0.0, value=st.session_state.daily_expenses["others"])
+if st.button("💾 حفظ المصروفات اليومية وتحديث الصافي"):
+st.success("تم تحديث الدفتر التشغيلي وإعادة احتساب صافي أرباح المحطة بنجاح!")
+
+=========================================================================
+
+6️⃣ لوحة الإدارة وتحديث الباقات والعمال والبضائع ⚙️
+
+=========================================================================
+elif menu == "إعدادات الباقات والعمال":
+st.markdown("## ⚙️ لوحة الإدارة وتحديث الباقات والخدمات والبضائع الحية")
+st.write("---")
+# قسم التحكم بالفنيين والعمال (إضافة وحذف)
+st.subheader("👥 إدارة طاقم العمال والفنيين الحاليين")
+new_w_name = st.text_input("اسم الفني الجديد بالكامل:")
+if st.button("➕ تثبيت فني جديد بالنظام"):
+if new_w_name:
+st.session_state.workers.append({"name": new_w_name, "commission_rate": 0, "advance": 0})
+st.success(f"تم تسجيل الفني '{new_w_name}' بنجاح!")
+st.rerun()
+# حذف عامل نهائياً من السيستم
+del_w_name = st.selectbox("شطب وفصل عامل نهائياً من النظام:", [w["name"] for w in st.session_state.workers])
+if st.button("❌ حذف الفني وفصله"):
+st.session_state.workers = [w for w in st.session_state.workers if w["name"] != del_w_name]
+st.success("تم شطب الفني وتحديث الكشوفات!")
+st.rerun()
+st.write("---")
+# إمكانية إضافة وتعديل وحذف باقات الغسيل (سيدان / جيب)
+st.subheader("🚗 إدارة باقات وخدمات الغسيل والتسعير الآلي لـ Sabiha Hub")
+new_s_name = st.text_input("اسم الخدمة الجديدة المضافة لوحدة الغسيل:")
+s_price = st.number_input("سعر فئة الملاكي / سيدان (ج.م):", min_value=0, value=100)
+suv_price = st.number_input("سعر فئة SUV / جيب (ج.م):", min_value=0, value=150)
+if st.button("➕ تثبيت الباقة والخدمة الجديدة"):
+if new_s_name:
+st.session_state.services.append({"name": new_s_name, "price_sedan": s_price, "price_suv": suv_price})
+st.success(f"تم إدراج باقة '{new_s_name}' بنجاح وتفعيل التسعير التلقائي!")
+st.rerun()
+# عرض الخدمات الحالية المتاحة مع زر للحذف الفوري للباقة
+st.write("باقات الخدمة الحالية النشطة:")
+for s in st.session_state.services:
+c_ser1, c_ser2 = st.columns([3, 1])
+with c_ser1:
+st.write(f"🔹 {s['name']} | سيدان: {s['price_sedan']} ج.م | SUV: {s['price_suv']} ج.م")
+with c_ser2:
+if st.button("حذف الباقة", key=f"del_b_btn_{s['name']}"):
+st.session_state.services.remove(s)
+st.success("تم مسح باقة الخدمة!")
+st.rerun()
+st.write("---")
+# إمكانية إضافة وتعديل وحذف بضائع للبيع المباشر بدون عمولة
+st.subheader("📦 إدارة وتحديث البضائع والمستلزمات الحالية")
+new_p_name = st.text_input("اسم المنتج أو البضاعة المتاحة للبيع:")
+p_price = st.number_input("سعر بيع البضاعة للعميل النهائي (ج.م):", min_value=0, value=50)
+if st.button("➕ إضافة البضاعة الحالية للرفوف"):
+if new_p_name:
+st.session_state.products.append({"name": new_p_name, "price": p_price})
+st.success(f"تم تسجيل وإدراج بضاعة '{new_p_name}' بنجاح!")
+st.rerun()
+for p in st.session_state.products:
+c_prod1, c_prod2 = st.columns([3, 1])
+with c_prod1:
+st.write(f"📦 {p['name']} | السعر المستحق: {p['price']} ج.م")
+with c_prod2:
+if st.button("حذف البضاعة", key=f"p_del_btn_{p['name']}"):
+st.session_state.products.remove(p)
+st.success("تم مسح وحذف المنتج!")
+st.rerun()
