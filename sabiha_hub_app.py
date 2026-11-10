@@ -271,29 +271,28 @@ st.success("🎉 تم ترحيل أداء اليوم بنجاح إلى الأر�
 st.rerun()
 st.write("---")
 st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
-        for inv in st.session_state.invoices:
-            c1, c2, c3, c4 = st.columns(4)
-            with c1: 
-                st.write(f"#{inv['id']} - {inv['customer']}")
-            with c2: 
-                st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
-            with c3:
-                # زر إلغاء الفاتورة (تغيير حالتها إلى ملغية بدلاً من حذفها نهائياً لسلامة الحسابات)
-                if inv.get('status') != 'cancelled':
-                    if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
-                        inv['status'] = 'cancelled'
-                        inv['amount'] = 0  # تصفير القيمة ماليًا
-                        st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
-                        st.rerun()
-                else:
-                    st.warning("ملغاة ❌")
-            with c4:
-                # زر الحذف النهائي من النظام
-                if st.button("حذف نهائي", key=f"del_{inv['id']}"):
-                    st.session_state.invoices.remove(inv)
-                    st.success("تم الحذف بنجاح!")
-                    st.rerun()
-
+ st.write("---")
+st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
+for inv in st.session_state.invoices:
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.write(f"#{inv['id']} - {inv['customer']}")
+    with c2:
+        st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
+    with c3:
+        if inv.get('status') != 'cancelled':
+            if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
+                inv['status'] = 'cancelled'
+                inv['amount'] = 0
+                st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
+                st.rerun()
+        else:
+            st.warning("ملغاة ❌")
+    with c4:
+        if st.button("حذف نهائي", key=f"del_{inv['id']}"):
+            st.session_state.invoices.remove(inv)
+            st.success("تم الحذف بنجاح!")
+            st.rerun()
 if inv["status"] == "نشطة":
 with st.popover("❌ كنسلة الفاتورة"):
 reason = st.text_input("اكتب سبب الإلغاء الفعلي:", key=f"res_{inv['id']}")
