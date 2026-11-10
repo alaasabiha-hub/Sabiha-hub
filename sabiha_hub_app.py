@@ -237,36 +237,11 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     cancelled_inv = [inv for inv in st.session_state.invoices if inv["status"] == "ملغاة"]
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
-        # --- تنظيف وإصلاح ألوان الثيم والخانات والقائمة الجانبية ---
-        st.markdown("""
-            <style>
-                /* إجبار القائمة الجانبية على إظهار النصوص باللون الأسود الداكن بوضوح */
-                [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
-                [data-testid="stSidebar"] span, 
-                [data-testid="stSidebar"] label,
-                [data-testid="stSidebar"] a {
-                    color: #111111 !important;
-                    font-size: 15px !important;
-                    font-weight: bold !important;
-                }
-                /* إصلاح الخانات البيضاء ليكون النص المكتوب داخلها أسود واضح جداً */
-                input, select, textarea, div[data-baseweb="input"] input {
-                    color: #111111 !important;
-                    background-color: #ffffff !important;
-                    -webkit-text-fill-color: #111111 !important;
-                }
-                /* إصلاح نصوص التنبيهات */
-                .stAlert p {
-                    color: #111111 !important;
-                }
-            </style>
-        """, unsafe_allow_html=True)
-
         # حساب وبناء مربعات الأداء لليوم (تكملة لصفحة الأداء لليوم الحالية)
         try:
             col_a, col_b, col_c = st.columns(3)
             with col_a:
-                st.metric("إجمالي Mبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
+                st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
             with col_b:
                 st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
             with col_c:
@@ -301,15 +276,38 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
         else:
             st.info("لا توجد فواتير مسجلة اليوم.")
 
-# --- بناء بقية الصفحات لتظهر عند الضغط عليها في القائمة الجانبية (خارج شرط الأداء لليوم) ---
+# --- بناء بقية الصفحات لتظهر عند الضغط عليها في القائمة الجانبية (خارج شرط الأداء لليوم تبدأ من أول السطر) ---
 elif menu == "كاشير الاستقبال POS" and st.session_state.user_role == "owner":
     st.title("🛒 كاشير الاستقبال POS")
     st.write("---")
-    # هنا شاشة الكاشير لإنشاء فواتير جديدة
     st.info("شاشة الكاشير ونظام نقطة البيع جاهز لإضافة محتواك.")
 
 elif menu == "إعدادات الباقات والعمال" and st.session_state.user_role == "owner":
     st.title("⚙️ إعدادات الباقات والخدمات")
     st.write("---")
-    # هنا شاشة التحكم بالخدمات والباقات وحذفها
     st.info("شاشة إدارة الخدمات والباقات والعمال المتاحة بالمغسلة.")
+
+# --- تنظيف وإصلاح ألوان الثيم والخانات والقائمة الجانبية (خارج البلوك من أول السطر تماماً لمنع الأخطاء) ---
+st.markdown("""
+    <style>
+        /* إجبار القائمة الجانبية على إظهار النصوص باللون الأسود الداكن بوضوح */
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
+        [data-testid="stSidebar"] span, 
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] a {
+            color: #111111 !important;
+            font-size: 15px !important;
+            font-weight: bold !important;
+        }
+        /* إصلاح الخانات البيضاء ليكون النص المكتوب داخلها أسود واضح جداً */
+        input, select, textarea, div[data-baseweb="input"] input {
+            color: #111111 !important;
+            background-color: #ffffff !important;
+            -webkit-text-fill-color: #111111 !important;
+        }
+        /* إصلاح نصوص التنبيهات والمقاييس */
+        .stAlert p, [data-testid="stMetricValue"] {
+            color: #111111 !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
