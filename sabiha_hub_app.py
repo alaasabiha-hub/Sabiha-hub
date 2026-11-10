@@ -509,78 +509,62 @@ st.write(f"👤 الفني: {w['name']} | 💰 العمولات المكتسبة
 
 =========================================================================
 
-# دفتر المصروفات اليومية 💸
+# =========================================================================
+# 3️⃣ شاشة كشف حساب العمولات والسلفيات الحية 👥
+# =========================================================================
+elif menu == "كشف العمولات والسلفيات الحية":
+    st.markdown("## 👥 إدارة عمولات العمال والسلفيات الحية")
+    st.write("---")
+    
+    if st.session_state.workers:
+        for worker in st.session_state.workers:
+            w_name = worker["name"]
+            # حساب إجمالي عمولات العامل الحالي من فواتير اليوم النشطة
+            w_commissions = sum(inv.get("commission", 0) for inv in active_inv if inv.get("worker") == w_name)
+            net_worker_amount = w_commissions - worker.get("advance", 0)
+            
+            st.write(f"### 👤 العامل: {w_name}")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("إجمالي العمولات المكتسبة", f"{w_commissions} ج.م")
+            with col2:
+                st.metric("السحوبات والسلفيات الحالية", f"{worker.get('advance', 0)} ج.م")
+            with col3:
+                st.metric("الصافي المستحق للدفع", f"{net_worker_amount} ج.م")
+                
+            # إمكانية تسجيل سلفة جديدة للعامل
+            with st.popover(f"💵 تسجيل سلفة لـ {w_name}"):
+                advance_amount = st.number_input("مبلغ السلفة:", min_value=0.0, step=10.0, key=f"adv_in_{w_name}")
+                if st.button("تأكيد السلفة", key=f"adv_btn_{w_name}"):
+                    worker["advance"] += advance_amount
+                    st.success(f"تم تسجيل سلفة بقيمة {advance_amount} ج.م للعامل {w_name}")
+                    st.rerun()
+            st.write("---")
+    else:
+        st.info("لا يوجد عمال مسجلين في النظام حالياً.")
 
-=========================================================================
-elif menu == "دفتر المصروفات":
-st.markdown("## 💸 إدارة المصروفات التشغيلية اليومية")
-st.write("---")
-st.session_state.daily_expenses["rent"] = st.number_input("تكلفة الإيجار اليومي والمقر المحاسبي (ج.م):", min_value=0.0, value=st.session_state.daily_expenses["rent"])
-st.session_state.daily_expenses["chemicals"] = st.number_input("تكلفة المشتريات والكيماويات وخامات الغسيل (ج.م):", min_value=0.0, value=st.session_state.daily_expenses["chemicals"])
-st.session_state.daily_expenses["others"] = st.number_input("مصروفات ونثريات تشغيلية أخرى (ج.م):", min_value=0.0, value=st.session_state.daily_expenses["others"])
-if st.button("💾 حفظ المصروفات اليومية وتحديث الصافي"):
-st.success("تم تحديث الدفتر التشغيلي وإعادة احتساب صافي أرباح المحطة بنجاح!")
-
-=========================================================================
-
-6️⃣ لوحة الإدارة وتحديث الباقات والعمال والبضائع ⚙️
-
-=========================================================================
-elif menu == "إعدادات الباقات والعمال":
-st.markdown("## ⚙️ لوحة الإدارة وتحديث الباقات والخدمات والبضائع الحية")
-st.write("---")
-# قسم التحكم بالفنيين والعمال (إضافة وحذف)
-st.subheader("👥 إدارة طاقم العمال والفنيين الحاليين")
-new_w_name = st.text_input("اسم الفني الجديد بالكامل:")
-if st.button("➕ تثبيت فني جديد بالنظام"):
-if new_w_name:
-st.session_state.workers.append({"name": new_w_name, "commission_rate": 0, "advance": 0})
-st.success(f"تم تسجيل الفني '{new_w_name}' بنجاح!")
-st.rerun()
-# حذف عامل نهائياً من السيستم
-del_w_name = st.selectbox("شطب وفصل عامل نهائياً من النظام:", [w["name"] for w in st.session_state.workers])
-if st.button("❌ حذف الفني وفصله"):
-st.session_state.workers = [w for w in st.session_state.workers if w["name"] != del_w_name]
-st.success("تم شطب الفني وتحديث الكشوفات!")
-st.rerun()
-st.write("---")
-# إمكانية إضافة وتعديل وحذف باقات الغسيل (سيدان / جيب)
-st.subheader("🚗 إدارة باقات وخدمات الغسيل والتسعير الآلي لـ Sabiha Hub")
-new_s_name = st.text_input("اسم الخدمة الجديدة المضافة لوحدة الغسيل:")
-s_price = st.number_input("سعر فئة الملاكي / سيدان (ج.م):", min_value=0, value=100)
-suv_price = st.number_input("سعر فئة SUV / جيب (ج.م):", min_value=0, value=150)
-if st.button("➕ تثبيت الباقة والخدمة الجديدة"):
-if new_s_name:
-st.session_state.services.append({"name": new_s_name, "price_sedan": s_price, "price_suv": suv_price})
-st.success(f"تم إدراج باقة '{new_s_name}' بنجاح وتفعيل التسعير التلقائي!")
-st.rerun()
-# عرض الخدمات الحالية المتاحة مع زر للحذف الفوري للباقة
-st.write("باقات الخدمة الحالية النشطة:")
-for s in st.session_state.services:
-c_ser1, c_ser2 = st.columns([3, 1])
-with c_ser1:
-st.write(f"🔹 {s['name']} | سيدان: {s['price_sedan']} ج.م | SUV: {s['price_suv']} ج.م")
-with c_ser2:
-if st.button("حذف الباقة", key=f"del_b_btn_{s['name']}"):
-st.session_state.services.remove(s)
-st.success("تم مسح باقة الخدمة!")
-st.rerun()
-st.write("---")
-# إمكانية إضافة وتعديل وحذف بضائع للبيع المباشر بدون عمولة
-st.subheader("📦 إدارة وتحديث البضائع والمستلزمات الحالية")
-new_p_name = st.text_input("اسم المنتج أو البضاعة المتاحة للبيع:")
-p_price = st.number_input("سعر بيع البضاعة للعميل النهائي (ج.م):", min_value=0, value=50)
-if st.button("➕ إضافة البضاعة الحالية للرفوف"):
-if new_p_name:
-st.session_state.products.append({"name": new_p_name, "price": p_price})
-st.success(f"تم تسجيل وإدراج بضاعة '{new_p_name}' بنجاح!")
-st.rerun()
-for p in st.session_state.products:
-c_prod1, c_prod2 = st.columns([3, 1])
-with c_prod1:
-st.write(f"📦 {p['name']} | السعر المستحق: {p['price']} ج.م")
-with c_prod2:
-if st.button("حذف البضاعة", key=f"p_del_btn_{p['name']}"):
-st.session_state.products.remove(p)
-st.success("تم مسح وحذف المنتج!")
-st.rerun()
+# =========================================================================
+# 4️⃣ دفتر المصروفات اليومية 💸
+# =========================================================================
+elif menu == "دفتر المصروفات اليومية":
+    st.markdown("## 💸 إدارة دفتر المصروفات اليومية والتشغيلية")
+    st.write("---")
+    
+    with st.form("expenses_form"):
+        st.write("### 📝 تحديث قيم المصروفات الحالية:")
+        rent = st.number_input("إيجار اليوم / المحل:", min_value=0.0, value=float(st.session_state.daily_expenses.get("rent", 0)), step=50.0)
+        chemicals = st.number_input("خامات ومواد كيميائية:", min_value=0.0, value=float(st.session_state.daily_expenses.get("chemicals", 0)), step=10.0)
+        others = st.number_input("مصروفات نثرية أخرى:", min_value=0.0, value=float(st.session_state.daily_expenses.get("others", 0)), step=10.0)
+        
+        save_exp = st.form_submit_button("حفظ وتحديث دفتر المصروفات 💾")
+        if save_exp:
+            st.session_state.daily_expenses["rent"] = rent
+            st.session_state.daily_expenses["chemicals"] = chemicals
+            st.session_state.daily_expenses["others"] = others
+            st.success("تم تحديث وحفظ قيم المصروفات التشغيلية لليوم بنجاح!")
+            st.rerun()
+            
+    st.write("---")
+    st.write("### 📊 إجمالي المصروفات المسجلة لليوم:")
+    total_exp = sum(st.session_state.daily_expenses.values())
+    st.error(f"💸 إجمالي الاستهلاك والمصروفات: {total_exp} ج.م")
