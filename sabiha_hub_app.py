@@ -293,46 +293,6 @@ for inv in st.session_state.invoices:
             st.session_state.invoices.remove(inv)
             st.success("تم الحذف بنجاح!")
             st.rerun()
-            
-    if inv.get("status") == "نشطة":
-        with st.popover("❌ كنسلة الفاتورة"):
-            reason = st.text_input("اكتب سبب الإلغاء الفعلي:", key=f"res_{inv['id']}")
-            if st.button("تأكيد الكنسلة النهائية", key=f"btn_{inv['id']}"):
-                if reason:
-                    inv["status"] = "ملغاة"
-                    inv["cancel_reason"] = reason
-                    inv["cancelled_by"] = "المالك"
-                    inv["cancel_date"] = current_date_str
-
-    with c3:
-        if inv.get('status') != 'cancelled':
-            if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
-                inv['status'] = 'cancelled'
-                inv['amount'] = 0
-                st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
-                st.rerun()
-        else:
-            st.warning("ملغاة ❌")
-    with c4:
-        if st.button("حذف نهائي", key=f"del_{inv['id']}"):
-            st.session_state.invoices.remove(inv)
-            st.success("تم الحذف بنجاح!")
-            st.rerun()
-            
-    if inv.get("status") == "نشطة":
-        with st.popover("❌ كنسلة الفاتورة"):
-            reason = st.text_input("اكتب سبب الإلغاء الفعلي:", key=f"res_{inv['id']}")
-            if st.button("تأكيد الكنسلة النهائية", key=f"btn_{inv['id']}"):
-                if reason:
-                    inv["status"] = "ملغاة"
-                    inv["cancel_reason"] = reason
-                    inv["cancelled_by"] = "المالك"
-                    inv["cancel_date"] = current_date_str
-
-save_data(invoices_file, st.session_state.invoices)
-st.success("تم كنسلة الفاتورة بنجاح")
-st.rerun()
-else:
 if st.button("👁️ تفاصيل الإلغاء", key=f"view_{inv['id']}"):
 st.info(f"السبب: {inv.get('cancel_reason')} | بواسطة: {inv.get('cancelled_by')}")
 elif menu == "📅 الأرشيف والحسابات الشهرية" and st.session_state.user_role == "owner":
