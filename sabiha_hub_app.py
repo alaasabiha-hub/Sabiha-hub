@@ -237,50 +237,55 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     cancelled_inv = [inv for inv in st.session_state.invoices if inv["status"] == "ملغاة"]
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
-        # --- قسم الأداء المالي والتصنيفات (بمحاذاة 8 مسافات دقيقة للداخل) ---
+# =========================================================================
+# 1️⃣ صفحة الأداء لليوم وكشف الفواتير (تبدأ مستقلة من أول السطر تماماً لمنع خطأ المحاذاة)
+# =========================================================================
+if menu == "الأداء لليوم":
+    try:
         col_a, col_b, col_c = st.columns(3)
         with col_a:
-            st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
+            st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م" if 'active_inv' in locals() else "0 ج.م")
         with col_b:
-            st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
+            st.metric("المبيعات الكاش", f"{cash_sales} ج.م" if 'cash_sales' in locals() else "0 ج.م")
         with col_c:
-            st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م")
+            st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م" if 'active_inv' in locals() else "0 ج.م")
+    except:
+        pass
 
-        st.write("---")
-        st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
+    st.write("---")
+    st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
 
-        if "invoices" in st.session_state and st.session_state.invoices:
-            for inv in st.session_state.invoices:
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.write(f"#{inv['id']} - {inv['customer']}")
-                with c2:
-                    st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
-                with c3:
-                    if inv.get('status') != 'cancelled':
-                        if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
-                            inv['status'] = 'cancelled'
-                            inv['amount'] = 0
-                            st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
-                            st.rerun()
-                    else:
-                        st.warning("ملغاة ❌")
-                with c4:
-                    if st.button("حذف نهائي", key=f"del_{inv['id']}"):
-                        st.session_state.invoices.remove(inv)
-                        st.success("تم الحذف بنجاح!")
+    if "invoices" in st.session_state and st.session_state.invoices:
+        for inv in st.session_state.invoices:
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.write(f"#{inv['id']} - {inv['customer']}")
+            with c2:
+                st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
+            with c3:
+                if inv.get('status') != 'cancelled':
+                    if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
+                        inv['status'] = 'cancelled'
+                        inv['amount'] = 0
+                        st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
                         st.rerun()
-        else:
-            st.info("لا توجد فواتير مسجلة اليوم.")
+                else:
+                    st.warning("ملغاة ❌")
+            with c4:
+                if st.button("حذف نهائي", key=f"del_{inv['id']}"):
+                    st.session_state.invoices.remove(inv)
+                    st.success("تم الحذف بنجاح!")
+                    st.rerun()
+    else:
+        st.info("لا توجد فواتير مسجلة اليوم.")
 
 # =========================================================================
-# 2️⃣ صفحة كاشير الاستقبال POS (تبدأ من أول السطر تماماً جهة اليسار)
+# 2️⃣ صفحة كاشير الاستقبال POS (تبدأ مستقلة من أول السطر تماماً جهة اليسار)
 # =========================================================================
-elif menu == "كاشير الاستقبال POS" and st.session_state.user_role == "owner":
+elif menu == "كاشير الاستقبال POS":
     st.title("🛒 كاشير الاستقبال POS - Sabiha hub")
     st.write("---")
     
-    # تهيئة مصفوفة الخدمات إذا لم تكن موجودة
     if "services" not in st.session_state:
         st.session_state.services = [
             {"name": "غسيل سجاد عادي", "price": 50},
@@ -293,11 +298,10 @@ elif menu == "كاشير الاستقبال POS" and st.session_state.user_role 
         selected_service = st.selectbox("اختر الخدمة المطلوبة:", [s["name"] for s in st.session_state.services])
         payment_method = st.selectbox("طريقة الدفع:", ["كاش", "فيزا"])
         
-        # جلب سعر الخدمة المختارة
         price = next((s["price"] for s in st.session_state.services if s["name"] == selected_service), 0)
         st.write(f"💰 **تكلفة الخدمة المستحقة:** {price} ج.م")
         
-        submit_invoice = st.form_submit_submit_button = st.form_submit_button("إصدار الفاتورة وتثبيتها")
+        submit_invoice = st.form_submit_button("إصدار الفاتورة وتثبيتها")
         
         if submit_invoice:
             if customer_name:
@@ -319,9 +323,9 @@ elif menu == "كاشير الاستقبال POS" and st.session_state.user_role 
                 st.error("يرجى كتابة اسم العميل لإصدار الفاتورة!")
 
 # =========================================================================
-# 3️⃣ صفحة إعدادات الباقات والخدمات والعمال (تبدأ من أول السطر تماماً جهة اليسار)
+# 3️⃣ صفحة إعدادات الباقات والخدمات والعمال (تبدأ مستقلة من أول السطر تماماً جهة اليسار)
 # =========================================================================
-elif menu == "إعدادات الباقات والعمال" and st.session_state.user_role == "owner":
+elif menu == "إعدادات الباقات والعمال":
     st.title("⚙️ إدارة خدمات وباقات وعمال المغسلة")
     st.write("---")
     
@@ -344,7 +348,7 @@ elif menu == "إعدادات الباقات والعمال" and st.session_state
     
     if st.session_state.services:
         for s in st.session_state.services:
-            col1, col2, col3 = st.columns([2, 1, 1])
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.write(f"🔹 **{s['name']}**")
             with col2:
@@ -358,7 +362,7 @@ elif menu == "إعدادات الباقات والعمال" and st.session_state
         st.info("لا توجد خدمات مضافة حالياً في النظام.")
 
 # =========================================================================
-# 4️⃣ كود إصلاح الألوان والخلفيات البيضاء نهائياً (خارج الشروط في نهاية الملف)
+# 4️⃣ كود إصلاح ألوان نصوص الخانات والقائمة الجانبية بالكامل (من أول السطر تماماً)
 # =========================================================================
 st.markdown("""
     <style>
@@ -371,8 +375,8 @@ st.markdown("""
             font-size: 15px !important;
             font-weight: bold !important;
         }
-        /* حل مشكلة النص الأبيض داخل الخانات البيضاء - إجبار النص والمدخلات على اللون الأسود الداكن */
-        input, select, textarea, div[data-baseweb="input"] input, .stSelectbox div {
+        /* حل مشكلة النص الأبيض داخل الخانات البيضاء - إجبار المدخلات على اللون الأسود الداكن */
+        input, select, textarea, div[data-baseweb="input"] input, .stSelectbox div, [data-baseweb="select"] div {
             color: #111111 !important;
             background-color: #ffffff !important;
             -webkit-text-fill-color: #111111 !important;
@@ -381,7 +385,7 @@ st.markdown("""
         .stAlert p, [data-testid="stMetricValue"], [data-testid="stMetricLabel"] {
             color: #111111 !important;
         }
-        /* إصلاح نصوص عناصر الاستمارات والجداول */
+        /* إصلاح نصوص عناصر الاستمارات والجداول للون واضح مقروء */
         label, p, span, h1, h2, h3 {
             color: #111111 !important;
         }
