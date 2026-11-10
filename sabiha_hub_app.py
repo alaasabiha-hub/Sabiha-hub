@@ -248,7 +248,7 @@ if st.sidebar.button("🚪 تسجيل الخروج"):
 # ==========================================
 # 5. استعراض الحسابات والعدادات الـ 5
 # ==========================================
-if menu == "dashboard" and st.session_state.user_role == "owner":
+if menu == "لوحة الداشبورد الرئيسية 📊" and st.session_state.user_role == "owner":
     st.title("📊 الأداء المالي والتشغيلي لليوم")
     
     f_time = f"📅 اليوم: {current_day_ar} | التاريخ: {current_date_str}"
@@ -435,7 +435,7 @@ elif menu == "POS كاشير الاستقبال والخدمات":
         # حساب سعر الخدمة بناءً على نوع المركبة المختارة
         pass
 
-elif menu == "كاشير الاستقبال POS":
+elif menu == "POS كاشير الاستقبال والخدمات 🛒":
     st.markdown("## 🛒 كاشير الاستقبال وتسجيل الفواتير")
     st.write("---")
     
@@ -518,7 +518,7 @@ elif menu == "تقرير الحسابات الشهرية":
         else:
             st.warning("⚠️ لا توجد فواتير أو بيانات مؤرشفة في هذا السجل المحاسبي لهذا الشهر بعد.")
 
-    elif menu == "العمولات والسلفيات الحية":
+elif menu == "العمولات والسلفيات الحية 👥":
         st.markdown("## 👥 كشف حساب العمولات والسلفيات الحية للعمال")
         st.write("---")
         # تتيح للمالك مسح وتعديل السلفية المدفوعة للفني وتصحيح الحسابات
@@ -570,15 +570,15 @@ elif menu == "تقرير الحسابات الشهرية":
     else:
         st.info("لا يوجد عمال مسجلين في النظام حالياً.")
 
-if menu == "دفتر المصروفات اليومية":
+elif menu == "دفتر المصروفات 💸":
     st.markdown("## 💸 إدارة دفتر المصروفات اليومية والتشغيلية")
     st.write("---")
-    with st.form("expenses_form"):  
-        
-        save_exp = st.form_submit_button("حفظ وتحديث دفتر المصروفات 💾")
+    with st.form("expenses_form"):
+        save_exp = st.form_submit_button("💾 حفظ وتحديث دفتر المصروفات")
         if save_exp:
             st.session_state.daily_expenses["rent"] = rent
             st.session_state.daily_expenses["chemicals"] = chemicals
             st.session_state.daily_expenses["others"] = others
-            st.success("تم تحديث وحفظ قيم المصروفات التشغيلية لليوم بنجاح!")
+            st.success("🎉 تم تحديث وحفظ قيم المصروفات التشغيلية لليوم بنجاح!")
             st.rerun()
+
