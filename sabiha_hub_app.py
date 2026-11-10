@@ -552,16 +552,22 @@ st.write("---")
 if menu == "دفتر المصروفات 💸":
     st.markdown("## 💸 إدارة دفتر المصروفات اليومية والتشغيلية")
     st.write("---")
-
-            # إمكانية تسجيل سلفة جديدة للعامل
-            with st.popover(f"💵 تسجيل سلفة لـ {w_name}"):
-                advance_amount = st.number_input("مبلغ السلفة:", min_value=0.0, step=10.0, key=f"adv_in_{w_name}")
-                if st.button("تأكيد السلفة", key=f"adv_btn_{w_name}"):
-                    worker["advance"] += advance_amount
-                    st.success(f"تم تسجيل سلفة بقيمة {advance_amount} ج.م للعامل {w_name}")
-                    st.rerun()
-
+    
+    with st.form("expenses_form"):
+        st.write("### 📝 تحديث قيم المصروفات التشغيلية الحالية:")
+        rent = st.number_input("إيجار اليوم / المحل:", min_value=0.0, value=float(st.session_state.daily_expenses.get("rent", 1000.0)), step=50.0)
+        chemicals = st.number_input("خامات ومواد كيميائية:", min_value=0.0, value=float(st.session_state.daily_expenses.get("chemicals", 100.0)), step=10.0)
+        others = st.number_input("مصروفات نثرية أخرى:", min_value=0.0, value=float(st.session_state.daily_expenses.get("others", 300.0)), step=10.0)
+        
+        save_exp = st.form_submit_button("حفظ وتحديث دفتر المصروفات 💾")
+        if save_exp:
+            st.session_state.daily_expenses["rent"] = rent
+            st.session_state.daily_expenses["chemicals"] = chemicals
             st.session_state.daily_expenses["others"] = others
             st.success("🎉 تم تحديث وحفظ قيم المصروفات التشغيلية لليوم بنجاح!")
             st.rerun()
-
+            
+    st.write("---")
+    st.write("### 📊 إجمالي المصروفات المسجلة لليوم:")
+    total_exp = sum(st.session_state.daily_expenses.values())
+    st.error(f"💸 إجمالي الاستهلاك والمصروفات: {total_exp} ج.م")
