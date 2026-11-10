@@ -141,9 +141,54 @@ elif "المصروفات" in raw_menu or "دفتر" in raw_menu:
 elif "إعدادات" in raw_menu or "الباقات" in raw_menu:
     menu = "إعدادات الباقات والعمال"
 
+# دالة لتوليد كود طباعة الفاتورة الفردية للعميل كـ PDF
+def generate_receipt_pdf_trigger(inv, key_suffix):
+    status_str = "نشطة" if inv.get("status", "Active") == "Active" else "مرتجع Refunded"
+    receipt_script = f"""
+    <script>
+    function printReceipt_{key_suffix}() {{
+        var win = window.open("", "", "height=500,width=400");
+        win.document.write("<html><head><title>فاتورة عميل - Sabiha Hub</title>");
+        win.document.write("<style>body{{font-family:sans-serif;direction:rtl;padding:10px;text-align:center;}} .ticket{{width:100%;max-width:300px;margin:auto;}} .header{{margin-bottom:15px;}} table{{width:100%;border-collapse:collapse;margin-top:10px;}} td{{padding:6px;text-align:right;font-size:14px;}} .total{{font-size:18px;font-weight:bold;margin-top:15px;border-top:1px dashed #000;padding-top:10px;}}</style>");
+        win.document.write("</head><body>");
+        win.document.write("<div class='ticket'>");
+        win.document.write("<div class='header'><h2>✨ Sabiha Hub ✨</h2><p>مركز صبيحة للعناية بالسيارات</p></div>");
+        win.document.write("<hr style='border-top:1px dashed #000;'>");
+        win.document.write("<table>");
+        win.document.write("<tr><td><b>رقم الفاتورة:</b></td><td>{inv['id']}</td></tr>");
+        win.document.write("<tr><td><b>التاريخ:</b></td><td>{inv['time']}</td></tr>");
+        win.document.write("<tr><td><b>رقم اللوحة:</b></td><td>{inv['plate_number']}</td></tr>");
+        win.document.write("<tr><td><b>الخدمة:</b></td><td>{inv['service']}</td></tr>");
+        win.document.write("<tr><td><b>الفئة:</b></td><td>{inv['car_type']}</td></tr>");
+        win.document.write("<tr><td><b>وسيلة الدفع:</b></td><td>{inv.get('payment','كاش')}</td></tr>");
+        win.document.write("<tr><td><b>الحالة:</b></td><td>{status_str}</td></tr>");
+        win.document.write("</table>");
+        win.document.write("<div class='total'><p>الإجمالي المحصل: {inv['total']:.2f} ج.م</p></div>");
+        win.document.write("<hr style='border-top:1px dashed #000;'>");
+        win.document.write("<p style='font-size:12px;'>شكراً لزيارتكم لـ Sabiha Hub 😊</p>");
+        win.document.write("</div>");
+        win.document.write("</body></html>");
+        win.document.close();
+        win.print();
+    }}
+    </script>
+    <button onclick="printReceipt_{key_suffix}()" style="background-color:#10B981;color:white;padding:6px 12px;border:none;border-radius:4px;cursor:pointer;font-size:13px;width:100%;">🖨️ طباعة الفاتورة للعميل (PDF)</button>
+    """
+    st.components.v1.html(receipt_script, height=35)
+
 # ============================================================================
 # 4. بناء الأقسام البرمجية والشاشات التفاعلية وحفظها التلقائي
 # ============================================================================
+
+# تجميع الفواتير غير المكررة لليوم لاستخدامها في الداشبورد والكاشير
+all_invoices = []
+seen_inv_ids = set()
+for worker_name, inv_list in st.session_state.session_state_invoices.items():
+    for inv in inv_list:
+        if inv["id"] not in seen_inv_ids:
+            seen_inv_ids.add(inv["id"])
+            unique_inv = inv.copy()
+            all_invoices.append(unique_inv)
 
 if menu == "📊 لوحة الداشبورد الرئيسية":
     st.markdown("## 📊 لوحة الأداء المالي والتشغيلي لليوم الحالي (مزامنة حية 🟢)")
@@ -152,53 +197,35 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
     calculated_sales = 0.0
     total_commissions = 0.0
     active_invoices_count = 0
-    all_invoices = []
     
-    for worker_name, inv_list in st.session_state.session_state_invoices.items():
-        for inv in inv_list:
-            all_invoices.append(inv)
-            if inv.get("status", "Active") == "Active":
-                calculated_sales += float(inv.get("total", 0.0))
-                # جمع العمولات المسجلة بداخل الفواتير
-                total_commissions += float(inv.get("commission_share", 0.0))
-                active_invoices_count += 1
+    for inv in all_invoices:
+        if inv.get("status", "Active") == "Active":
+            calculated_sales += float(inv.get("total", 0.0))
+            total_commissions += float(inv.get("commission_total", 0.0))
+            active_invoices_count += 1
             
-    # معالجة فريدة لمنع التكرار في الحساب الإجمالي للمبيعات والعمولات الكلية
-    # نقسم على 2 لأن الفاتورة تُسجل مرتين (مرة لكل عامل مشترك) لتظهر في كشوفاتهم
-    real_sales = calculated_sales / 2 if calculated_sales > 0 else 0.0
-    real_commissions = total_commissions / 2 if total_commissions > 0 else 0.0
-    real_invoices_count = int(active_invoices_count / 2)
-    
-    st.session_state.daily_sales = real_sales
+    st.session_state.daily_sales = calculated_sales
     tax_14 = st.session_state.daily_sales * 0.14
     total_expenses_today = float(st.session_state.daily_expenses.get("rent", 0.0)) + \
                          float(st.session_state.daily_expenses.get("operational", 0.0)) + \
                          float(st.session_state.daily_expenses.get("utilities", 0.0))
                          
-    net_profit = st.session_state.daily_sales - total_expenses_today - tax_14 - real_commissions
+    net_profit = st.session_state.daily_sales - total_expenses_today - tax_14 - total_commissions
 
     col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1: st.metric("💰 إجمالي المبيعات المحصلة", f"{st.session_state.daily_sales:.2f} ج.م", delta=f"{real_invoices_count} فاتورة نشطة")
+    with col_m1: st.metric("💰 إجمالي المبيعات المحصلة", f"{st.session_state.daily_sales:.2f} ج.م", delta=f"{active_invoices_count} فاتورة نشطة")
     with col_m2: st.metric("📉 إجمالي مصروفات اليوم (مخصومة)", f"{total_expenses_today:.2f} ج.م")
     with col_m3: st.metric("🏛️ ضريبة القيمة المضافة 14% (مخصومة)", f"{tax_14:.2f} ج.م")
     
     col_m4, col_m5 = st.columns(2)
-    with col_m4: st.metric("👨‍🔧 عمولات الفنيين الحية (مخصومة)", f"{real_commissions:.2f} ج.م")
+    with col_m4: st.metric("👨‍🔧 عمولات الفنيين الحية (مخصومة)", f"{total_commissions:.2f} ج.م")
     with col_m5: st.metric("🟩 صافي المبيعات / الأرباح الحالي", f"{net_profit:.2f} ج.م")
     
     st.write("---")
-    st.subheader("📥 تحميل وطباعة التقارير والملخصات")
+    st.subheader("📥 تحميل وطباعة التقارير والملخصات للمالك")
     
-    # فلترة عرض جدول الفواتير في التقرير لمنع تكرار الأسطر المزدوجة للعمال
-    seen_inv_ids = set()
-    unique_invoices = []
-    for inv in all_invoices:
-        if inv["id"] not in seen_inv_ids:
-            seen_inv_ids.add(inv["id"])
-            unique_invoices.append(inv)
-            
     invoices_html_rows = ""
-    for inv in unique_invoices:
+    for inv in all_invoices:
         status_text = "نشطة" if inv.get("status", "Active") == "Active" else "مرتجع Refunded"
         invoices_html_rows += f"""
         <tr>
@@ -226,7 +253,7 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
         win.document.write("<p><b>إجمالي المبيعات:</b> {st.session_state.daily_sales:.2f} ج.م</p>");
         win.document.write("<p><b>إجمالي المصروفات:</b> {total_expenses_today:.2f} ج.م</p>");
         win.document.write("<p><b>ضريبة القيمة المضافة 14%:</b> {tax_14:.2f} ج.م</p>");
-        win.document.write("<p><b>عمولات العمال والفنيين:</b> {real_commissions:.2f} ج.م</p>");
+        win.document.write("<p><b>عمولات العمال والفنيين:</b> {total_commissions:.2f} ج.m</p>");
         win.document.write("<p><b>صافي المبيعات والأرباح:</b> {net_profit:.2f} ج.م</p>");
         win.document.write("</div>");
         win.document.write("<h3>📋 كشف الفواتير والعمليات المُرَحَّلة:</h3>");
@@ -256,7 +283,7 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
                     "sales": st.session_state.daily_sales,
                     "expenses": total_expenses_today,
                     "tax": tax_14,
-                    "commissions": real_commissions,
+                    "commissions": total_commissions,
                     "net": net_profit,
                     "invoices": json.loads(json.dumps(st.session_state.session_state_invoices))
                 }
@@ -280,12 +307,12 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
     st.write("---")
     st.subheader("📋 كشف فواتير اليوم وإدارة المرتجعات (Refund)")
     
-    if unique_invoices:
-        for index, inv in enumerate(unique_invoices):
+    if all_invoices:
+        for index, inv in enumerate(all_invoices):
             col_i1, col_i2, col_i3, col_i4, col_refund = st.columns([2, 2, 2, 2, 1.5])
             with col_i1: st.write(f"🧾 رقم: **{inv['id']}** | اللوحة: `({inv.get('plate_number', '---')})`")
             with col_i2: st.write(f"🛍️ خدمة: *{inv['service']}* | الفنيين: `{inv.get('worker1','---')}` & `{inv.get('worker2','---')}`")
-            with col_i3: st.write(f"💵 القيمة: `{inv['total']:.2f} ج.م` | العمولة الثابتة الكلية: `{inv.get('commission_total', 0.0):.2f} ج.م`")
+            with col_i3: st.write(f"💵 القيمة: `{inv['total']:.2f} ج.م` | العمولة الكلية: `{inv.get('commission_total', 0.0):.2f} ج.م`")
             with col_i4: 
                 if inv.get("status", "Active") == "Active":
                     st.markdown("🟢 **الفاتورة نشطة**")
@@ -306,40 +333,33 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
         st.info("ℹ️ لا توجد فواتير أو عمليات مسجلة لليوم حتى الآن.")
 
 # ----------------------------------------------------------------------------
-# قسم كاشير الاستقبال (POS) - نظام توزيع العاملين وعمولة الخدمات الثابتة المحددة
+# قسم كاشير الاستقبال (POS) - نظام كشف الفواتير للعامِل وطباعة الإيصال PDF للعميل
 # ----------------------------------------------------------------------------
 elif menu == "كاشير الاستقبال POS":
     st.markdown("<h2 style='text-align: center;'>📥 كاشير الاستقبال وتسجيل الفواتير</h2>", unsafe_allow_html=True)
     st.write("---")
     
     with st.container():
-        # 1. إدخال رقم لوحة السيارة
         plate_number = st.text_input("🔢 رقم لوحة السيارة:", key="pos_plate_number_input").strip()
         
-        # 2. فئة حجم السيارة
         car_type = st.selectbox("🚗 فئة حجم السيارة للتسعير الآلي:", options=["ملاكي / سيدان", "SUV"])
         car_key = "الملكي" if car_type == "ملاكي / سيدان" else "SUV"
         
-        # 3. اختيار الخدمة المعتمدة
         service_options = list(st.session_state.services.keys())
         if not service_options:
             st.error("❌ لا توجد خدمات مسجلة في النظام.")
             service_options = ["لا توجد خدمات"]
         selected_service = st.selectbox("🛍️ اختر الخدمة المعتمدة:", options=service_options)
         
-        # جلب الفنيين المسجلين حياً لتوزيع الحارة والدتيلينج
         worker_list = [w["name"] for w in st.session_state.workers if isinstance(w, dict) and "name" in w]
         if not worker_list:
             worker_list = ["لا يوجد فني مسؤول"]
             
-        # 4. توزيع الفنيين (إضافة خانة عامل آخر لتوزيع العمولة الثابتة عليه)
         selected_worker1 = st.selectbox("👨‍🔧 فني حارة الغسيل (العامل الأول):", options=worker_list, key="pos_w1")
         selected_worker2 = st.selectbox("🧽 أخصائي الديتيلينج / التجهيز (العامل الثاني):", options=worker_list, key="pos_w2")
         
-        # 5. وسيلة السداد
         payment_method = st.radio("💵 وسيلة السداد:", options=["كاش", "فيزا"], horizontal=True)
         
-        # استدعاء السعر الافتراضي والعمولة الثابتة المحفوظة بالخدمة
         if selected_service in st.session_state.services:
             base_price = float(st.session_state.services[selected_service].get(car_key, 0.0))
             fixed_comm = float(st.session_state.services[selected_service].get("fixed_commission", 0.0))
@@ -351,7 +371,6 @@ elif menu == "كاشير الاستقبال POS":
         
         custom_price = st.number_input("💰 المبلغ المحصل الفعلي (ج.م):", min_value=0.0, value=base_price)
         
-        # حساب توزيع العمولة الثابتة بالتساوي بين العاملين المشتركين بالفاتورة
         share_commission = fixed_comm / 2
         st.write(f"📊 نصيب كل عامل من العمولة الثابتة (توزيع متساوي): **{share_commission:.2f} ج.م**")
         
@@ -361,7 +380,6 @@ elif menu == "كاشير الاستقبال POS":
             else:
                 invoice_id = f"INV-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
                 
-                # بناء هيكل الفاتورة الموحدة المشتركة
                 invoice_data = {
                     "id": invoice_id,
                     "plate_number": plate_number,
@@ -377,12 +395,10 @@ elif menu == "كاشير الاستقبال POS":
                     "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 
-                # ترحيل الفاتورة لحساب العامل الأول
                 if selected_worker1 not in st.session_state.session_state_invoices:
                     st.session_state.session_state_invoices[selected_worker1] = []
                 st.session_state.session_state_invoices[selected_worker1].append(invoice_data)
                 
-                # ترحيل الفاتورة لحساب العامل الثاني لضمان رصد المستحقات للطرفين
                 if selected_worker2 not in st.session_state.session_state_invoices:
                     st.session_state.session_state_invoices[selected_worker2] = []
                 st.session_state.session_state_invoices[selected_worker2].append(invoice_data)
@@ -390,6 +406,26 @@ elif menu == "كاشير الاستقبال POS":
                 st.success(f"🎉 تم إصدار الفاتورة [{invoice_id}] بنجاح وتوزيع العمولات الثابتة بالتساوي!")
                 st.balloons()
                 st.rerun()
+
+    # ------------------------------------------------------------------------
+    # ميزة الإظهار المباشر لجدول فواتير اليوم داخل شاشة الكاشير لطباعة الإيصالات للعميل حياً
+    # ------------------------------------------------------------------------
+    st.write("---")
+    st.subheader("📋 فواتير اليوم الحالية وطباعة إيصال العميل (PDF/Receipt)")
+    
+    if all_invoices:
+        for index, inv in enumerate(all_invoices):
+            col_pos1, col_pos2, col_pos3, col_pos_pdf = st.columns([3, 2, 2, 2.5])
+            with col_pos1: 
+                status_icon = "🟢" if inv.get("status", "Active") == "Active" else "↩️ مرتجع"
+                st.write(f"🧾 {status_icon} **{inv['id']}** | اللوحة: `({inv.get('plate_number', '---')})`")
+            with col_pos2: st.write(f"🛍️ {inv['service']} ({inv['car_type']})")
+            with col_pos3: st.write(f"💵 المبلغ: `{inv['total']:.2f} ج.م` | `{inv.get('payment','كاش')}`")
+            with col_pos_pdf:
+                # استدعاء دالة الطباعة وتوليد الـ PDF فوراً من المتصفح للعميل
+                generate_receipt_pdf_trigger(inv, f"pos_sheet_{index}")
+    else:
+        st.info("ℹ️ لا توجد فواتير صادرة لليوم حتى الآن بمستندات الكاشير.")
 
 elif menu == "تقرير الحسابات والأرشيف":
     st.markdown("## 📉 تقرير الحسابات والأرشيف المالي الشامل")
@@ -437,7 +473,6 @@ elif menu == "العمولات والسلفيات الحية":
             if w_name in st.session_state.session_state_invoices:
                 for inv in st.session_state.session_state_invoices[w_name]:
                     if inv.get("status", "Active") == "Active":
-                        # رصد الحصة الموزعة للعامل من الفاتورة حياً
                         w_commissions += float(inv.get("commission_share", 0.0))
                     
             w_advance = float(worker.get("advance", 0.0))
@@ -447,7 +482,7 @@ elif menu == "العمولات والسلفيات الحية":
                 col_b1, col_b2, col_b3 = st.columns(3)
                 with col_b1: st.metric("🎯 إجمالي العمولات الموزعة الثابتة", f"{w_commissions:.2f} ج.م")
                 with col_b2: st.metric("💸 السلفيات الحالية المسجلة", f"{w_advance:.2f} ج.م")
-                with col_b3: st.metric("💰 صافي الراتب المستحق للصرف", f"{net_payout:.2f} ج.m")
+                with col_b3: st.metric("💰 صافي الراتب المستحق للصرف", f"{net_payout:.2f} ج.م")
                 
                 st.write("---")
                 col_act1, col_act2 = st.columns(2)
