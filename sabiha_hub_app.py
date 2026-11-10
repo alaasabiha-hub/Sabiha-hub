@@ -511,7 +511,7 @@ elif menu == "تقرير الحسابات الشهرية":
                         w["advance"] += advance_amount
                         w["advance"] = 0
 
-st.subheader("📊 جدول الرواتب وعمولات مستحقات العمال الإجمالية الحالية")
+        st.subheader("📊 جدول الرواتب وعمولات مستحقات العمال الإجمالية الحالية")
         for w in st.session_state.workers:
             total_worker_commissions = sum(float(inv.get("commission", 0)) for inv in st.session_state.invoices if inv.get("worker") == w["name"] and inv.get("status") == "نشطة")
             net_worker_pay = total_worker_commissions - float(w["advance"])
@@ -519,10 +519,12 @@ st.subheader("📊 جدول الرواتب وعمولات مستحقات الع�
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1:
                 st.metric("إجمالي العمولات المكتسبة", f"{total_worker_commissions} ج.م")
+            with col_m2:
+                st.metric("السحوبات والسلفيات الحالية", f"{w['advance']} ج.م")
+            with col_m3:
+                st.metric("الصافي المستحق للدفع", f"{net_worker_pay} ج.م")
 
-        st.metric("السحوبات والسلفيات الحالية", f"{w['advance']} ج.م")
-    with col_m3:
-        st.metric("الصافي المستحق للدفع", f"{net_worker_pay} ج.م")
+
     st.write("---")
     st.markdown("### 👥 إدارة عمولات العمال والسلفيات الحية")
     st.write("---")
