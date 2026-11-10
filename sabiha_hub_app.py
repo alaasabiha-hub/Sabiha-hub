@@ -271,7 +271,7 @@ st.success("🎉 تم ترحيل أداء اليوم بنجاح إلى الأر�
 st.rerun()
 st.write("---")
 st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
- st.write("---")
+st.write("---")
 st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
 for inv in st.session_state.invoices:
     c1, c2, c3, c4 = st.columns(4)
