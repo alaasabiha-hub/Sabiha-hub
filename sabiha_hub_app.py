@@ -25,6 +25,9 @@ import os
 import datetime as dt
 import uuid
 import html
+import hashlib
+import hmac
+import secrets
 from copy import deepcopy
 
 # =============================================================================
@@ -39,6 +42,53 @@ st.set_page_config(
 
 DATA_FILE = "sabiha_persistent_data.json"
 APP_TITLE = "Sabiha Hub"
+
+# Password storage: salted PBKDF2-HMAC-SHA256 (one-way; original passwords cannot be displayed).
+PASSWORD_HASH_ITERATIONS = 310_000
+
+def hash_password(password: str) -> str:
+    """Return a salted, one-way PBKDF2 password hash."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, PASSWORD_HASH_ITERATIONS
+    )
+    return "pbkdf2_sha256${}${}${}".format(
+        PASSWORD_HASH_ITERATIONS, salt.hex(), digest.hex()
+    )
+
+def is_password_hash(value) -> bool:
+    return isinstance(value, str) and value.startswith("pbkdf2_sha256$")
+
+def verify_password(password: str, stored_value: str) -> bool:
+    """Verify both new hashes and legacy plaintext values during migration."""
+    if not isinstance(stored_value, str):
+        return False
+    if not is_password_hash(stored_value):
+        return hmac.compare_digest(password, stored_value)
+    try:
+        scheme, iterations, salt_hex, digest_hex = stored_value.split("$", 3)
+        if scheme != "pbkdf2_sha256":
+            return False
+        calculated = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), int(iterations)
+        ).hex()
+        return hmac.compare_digest(calculated, digest_hex)
+    except (ValueError, TypeError):
+        return False
+
+def migrate_plaintext_passwords(credentials: dict) -> bool:
+    """Upgrade legacy plaintext credentials in-place; return whether data changed."""
+    changed = False
+    owner = credentials.setdefault("owner", {})
+    if owner.get("password") and not is_password_hash(owner.get("password")):
+        owner["password"] = hash_password(str(owner["password"]))
+        changed = True
+    for account in credentials.setdefault("workers_accounts", {}).values():
+        stored = account.get("password")
+        if stored and not is_password_hash(stored):
+            account["password"] = hash_password(str(stored))
+            changed = True
+    return changed
 
 # Theme: light main area + dark navy sidebar, with explicit widget colors.
 st.markdown("""
@@ -283,6 +333,42 @@ st.markdown("""
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
 }
+
+/* Final dark-card contrast pass: cover common black/charcoal inline backgrounds. */
+[style*="background:#000"], [style*="background: #000"],
+[style*="background-color:#000"], [style*="background-color: #000"],
+[style*="background:#000000"], [style*="background: #000000"],
+[style*="background-color:#000000"], [style*="background-color: #000000"],
+[style*="rgb(0,0,0)"], [style*="rgb(0, 0, 0)"],
+[style*="rgb(24,24,24)"], [style*="rgb(24, 24, 24)"],
+[style*="#1e1e1e"], [style*="#1E1E1E"], [style*="#202124"],
+[style*="#212529"], [style*="#343a40"],
+[style*="background:#0b0f19"], [style*="background: #0b0f19"],
+[style*="background:#111827"], [style*="background: #111827"],
+[style*="background:#1f2937"], [style*="background: #1f2937"],
+[style*="background-color: rgb(0, 0, 0)"] {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+[style*="background:#000"] *, [style*="background: #000"] *,
+[style*="background-color:#000"] *, [style*="background-color: #000"] *,
+[style*="background:#000000"] *, [style*="background: #000000"] *,
+[style*="background-color:#000000"] *, [style*="background-color: #000000"] *,
+[style*="rgb(0,0,0)"] *, [style*="rgb(0, 0, 0)"] *,
+[style*="rgb(24,24,24)"] *, [style*="rgb(24, 24, 24)"] *,
+[style*="#1e1e1e"] *, [style*="#1E1E1E"] *, [style*="#202124"] *,
+[style*="#212529"] *, [style*="#343a40"] *,
+[style*="#111827"] *, [style*="#1f2937"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+/* PDF download controls: navy background with high-contrast white labels/icons. */
+.stDownloadButton > button, .stDownloadButton > button * {
+    background-color: #173b63 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border-color: #173b63 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -390,6 +476,10 @@ if "system_loaded" not in st.session_state:
         st.session_state[key] = value
     st.session_state.system_loaded = True
 
+# Automatically migrate any legacy plaintext passwords to salted one-way hashes.
+if migrate_plaintext_passwords(st.session_state.credentials):
+    save_system_data()
+
 # Normalize older worker accounts.
 for account in st.session_state.credentials.get("workers_accounts", {}).values():
     account.setdefault("permissions", ["🛒 كاشير الاستقبال POS"])
@@ -420,7 +510,7 @@ if not st.session_state.logged_in:
         login_password = st.text_input("🔒 كلمة المرور", type="password", key="login_password").strip()
         if st.button("دخول النظام 🚀", type="primary", use_container_width=True):
             owner = st.session_state.credentials.get("owner", {})
-            if login_user == owner.get("username") and login_password == owner.get("password"):
+            if login_user == owner.get("username") and verify_password(login_password, owner.get("password", "")):
                 st.session_state.logged_in = True
                 st.session_state.user_role = "owner"
                 st.session_state.current_user = "المالك"
@@ -429,7 +519,7 @@ if not st.session_state.logged_in:
             else:
                 matched = None
                 for uid, account in st.session_state.credentials.get("workers_accounts", {}).items():
-                    if login_user == uid and login_password == account.get("password"):
+                    if login_user == uid and verify_password(login_password, account.get("password", "")):
                         matched = (uid, account)
                         break
                 if matched:
@@ -549,7 +639,7 @@ def _pdf_text(value):
 
 
 def build_pdf(title, lines, table_data=None):
-    """Build an A4 PDF in memory; Arabic shaping is enabled when its extras exist."""
+    """Build an A4 PDF with embedded Arabic font and RTL shaping when available."""
     if not REPORTLAB_AVAILABLE:
         return None
     buffer = BytesIO()
@@ -560,7 +650,12 @@ def build_pdf(title, lines, table_data=None):
     )
     styles = getSampleStyleSheet()
     font_name = "Helvetica"
+    # Ship the Arabic font with the app so Streamlit Cloud does not fall back
+    # to Helvetica (which renders Arabic letters as empty squares).
+    app_dir = os.path.dirname(os.path.abspath(__file__))
     font_paths = [
+        os.path.join(app_dir, "assets", "NotoNaskhArabic-Regular.ttf"),
+        os.path.join(app_dir, "NotoNaskhArabic-Regular.ttf"),
         "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf",
@@ -1244,17 +1339,7 @@ elif page == "settings":
             "اسم مستخدم المالك",
             value=st.session_state.credentials["owner"].get("username", "owner"),
         )
-        show_owner_password = st.checkbox("إظهار كلمة المرور الحالية للمالك", key="show_owner_password")
-        if show_owner_password:
-            st.text_input(
-                "كلمة المرور الحالية للمالك",
-                value=st.session_state.credentials["owner"].get("password", ""),
-                type="default",
-                disabled=True,
-                key="owner_current_password_view",
-            )
-        else:
-            st.caption("كلمة المرور الحالية مخفية لحماية الحساب. فعّل خيار الإظهار عند الحاجة.")
+        st.info("🔐 كلمة مرور المالك محفوظة بتجزئة آمنة، ولا يمكن عرض النص الأصلي. يمكنك تعيين كلمة مرور جديدة في أي وقت.")
         owner_password = st.text_input(
             "كلمة مرور جديدة (اتركها فارغة دون تغيير)",
             type="password",
@@ -1264,7 +1349,7 @@ elif page == "settings":
             if owner_username.strip():
                 st.session_state.credentials["owner"]["username"] = owner_username.strip()
             if owner_password.strip():
-                st.session_state.credentials["owner"]["password"] = owner_password.strip()
+                st.session_state.credentials["owner"]["password"] = hash_password(owner_password.strip())
             save_system_data()
             st.success("تم تحديث بيانات المالك. سجّل الخروج ثم ادخل بالبيانات الجديدة.")
         st.divider()
@@ -1272,20 +1357,7 @@ elif page == "settings":
         accounts = st.session_state.credentials.setdefault("workers_accounts", {})
         for uid, account in list(accounts.items()):
             with st.expander(f"{account.get('name', uid)} ({uid})"):
-                show_worker_password = st.checkbox(
-                    "إظهار كلمة المرور الحالية",
-                    key=f"show_acc_password_{uid}",
-                )
-                if show_worker_password:
-                    st.text_input(
-                        "كلمة المرور الحالية",
-                        value=account.get("password", ""),
-                        type="default",
-                        disabled=True,
-                        key=f"acc_current_password_view_{uid}",
-                    )
-                else:
-                    st.caption("كلمة المرور الحالية مخفية. فعّل خيار الإظهار عند الحاجة.")
+                st.caption("🔐 كلمة المرور محفوظة بتجزئة آمنة ولا يمكن عرضها. يمكنك تعيين كلمة مرور جديدة أدناه.")
                 display_name = st.text_input(
                     "اسم الموظف",
                     value=account.get("name", uid),
@@ -1306,7 +1378,7 @@ elif page == "settings":
                     account["name"] = display_name.strip() or uid
                     account["permissions"] = perms
                     if new_password.strip():
-                        account["password"] = new_password.strip()
+                        account["password"] = hash_password(new_password.strip())
                     save_system_data()
                     st.success("تم تحديث الحساب.")
                     st.rerun()
@@ -1341,7 +1413,7 @@ elif page == "settings":
             else:
                 accounts[uid] = {
                     "name": display.strip(),
-                    "password": password.strip(),
+                    "password": hash_password(password.strip()),
                     "role": "worker",
                     "permissions": permissions,
                 }
