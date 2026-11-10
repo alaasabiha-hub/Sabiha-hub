@@ -237,14 +237,13 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     cancelled_inv = [inv for inv in st.session_state.invoices if inv["status"] == "ملغاة"]
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
-        # --- قسم الأداء المالي والتصنيفات (المحاذاة الصحيحة) ---
-    col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("إجمالي المبيعات", f"{total_sales} ج.م")
-        with col_b:
-            st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
-        with col_c:
-            st.metric("مبيعات الفيزا", f"{visa_sales} ج.م")
+col_a, col_b, col_c = st.columns(3)
+with col_a:
+    st.metric("إجمالي المبيعات", f"{total_sales} ج.م")
+with col_b:
+    st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
+with col_c:
+    st.metric("مبيعات الفيزا", f"{visa_sales} ج.م")
 
 st.write("---")
 st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
@@ -273,18 +272,13 @@ if "invoices" in st.session_state and st.session_state.invoices:
 else:
     st.info("لا توجد فواتير مسجلة اليوم.")
 
-# --- تنظيف وإصلاح ألوان الثيم والقائمة الجانبية نهائياً ---
+# الكود البرمجي لإظهار نصوص القائمة الجانبية بوضوح تام
 st.markdown("""
     <style>
-        /* إجبار القائمة الجانبية على قراءة النصوص باللون الداكن المناسب إذا كانت الخلفية بيضاء */
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
             color: #111111 !important;
             font-size: 16px !important;
-            font-weight: 500 !important;
-        }
-        /* إصلاح المربعات البيضاء التي تخفي النصوص في الواجهة */
-        .stAlert p, .stMetric div {
-            color: #111111 !important;
+            font-weight: bold !important;
         }
     </style>
 """, unsafe_allow_html=True)
