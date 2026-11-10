@@ -549,7 +549,7 @@ for w in st.session_state.workers:
                     st.success(f"تم تسجيل سلفة بقيمة {advance_amount} ج.م للعامل {w_name}")
                     st.rerun()
             st.write("---")
-    st.info("لايوجد عمال مسجلين في النظام حاليا.")
+        st.info("لا يوجد عمال مسجلين في النظام حالياً.")
 
 # =========================================================================
 # دفتر المصروفات اليومية
@@ -557,11 +557,9 @@ for w in st.session_state.workers:
 elif menu == "دفتر المصروفات اليومية":
     st.markdown("## 💸 إدارة دفتر المصروفات اليومية والتشغيلية")
     st.write("---")
+    
     with st.form("expenses_form"):
-        st.write("### 📝 تحديث قيم المصروفات الحالية:")
-        rent = st.number_input("إيجار اليوم / المحل:", min_value=0.0, value=float(st.session_state.daily_expenses.get("rent", 0)), step=50.0)
-        chemicals = st.number_input("خامات ومواد كيميائية:", min_value=0.0, value=float(st.session_state.daily_expenses.get("chemicals", 0)), step=10.0)
-        others = st.number_input("مصروفات نثرية أخرى:", min_value=0.0, value=float(st.session_state.daily_expenses.get("others", 0)), step=10.0)
+
         
         save_exp = st.form_submit_button("حفظ وتحديث دفتر المصروفات 💾")
         if save_exp:
