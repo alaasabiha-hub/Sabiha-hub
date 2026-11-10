@@ -529,8 +529,8 @@ for w in st.session_state.workers:
     with col_m3:
         st.metric("الصافي المستحق للدفع", f"{net_worker_pay} ج.م")
 
-
-# 3️⃣ شاشة كشف حساب العمولات والسلفيات الحية 👥
+# =========================================================================
+# شاشة كشف حساب العمولات والسلفيات الحية
 # =========================================================================
 elif menu == "كشف العمولات والسلفيات الحية":
     st.markdown("## 👥 إدارة عمولات العمال والسلفيات الحية")
@@ -539,14 +539,7 @@ elif menu == "كشف العمولات والسلفيات الحية":
     if st.session_state.workers:
         for worker in st.session_state.workers:
             w_name = worker["name"]
-            # حساب إجمالي عمولات العامل الحالي من فواتير اليوم النشطة
-            w_commissions = sum(inv.get("commission", 0) for inv in active_inv if inv.get("worker") == w_name)
-            net_worker_amount = w_commissions - worker.get("advance", 0)
-            
-            st.write(f"### 👤 العامل: {w_name}")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("إجمالي العمولات المكتسبة", f"{w_commissions} ج.م")
+
             with col2:
                 st.metric("السحوبات والسلفيات الحالية", f"{worker.get('advance', 0)} ج.م")
             with col3:
