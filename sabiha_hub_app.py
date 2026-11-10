@@ -237,56 +237,55 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     cancelled_inv = [inv for inv in st.session_state.invoices if inv["status"] == "ملغاة"]
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
-        # --- قسم الأداء المالي والتصنيفات (بمحاذاة 8 مسافات صحيحة للداخل) ---
+# --- كود مستقل تماماً لحماية لوحة التحكم والألوان ---
+try:
     col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("إجمالي المبيعات", f"{total_sales} ج.م")
-        with col_b:
-            st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
-        with col_c:
-            st.metric("مبيعات الفيزا", f"{visa_sales} ج.م")
+    with col_a:
+        st.metric("إجمالي المبيعات", f"{total_sales} ج.م" if 'total_sales' in locals() or 'total_sales' in globals() else "0 ج.م")
+    with col_b:
+        st.metric("المبيعات الكاش", f"{cash_sales} ج.م" if 'cash_sales' in locals() or 'cash_sales' in globals() else "0 ج.م")
+    with col_c:
+        st.metric("مبيعات الفيزا", f"{visa_sales} ج.م" if 'visa_sales' in locals() or 'visa_sales' in globals() else "0 ج.م")
+except Exception as e:
+    pass
 
-        st.write("---")
-        st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
+st.write("---")
+st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
 
-        if "invoices" in st.session_state and st.session_state.invoices:
-            for inv in st.session_state.invoices:
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.write(f"#{inv['id']} - {inv['customer']}")
-                with c2:
-                    st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
-                with c3:
-                    if inv.get('status') != 'cancelled':
-                        if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
-                            inv['status'] = 'cancelled'
-                            inv['amount'] = 0
-                            st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
-                            st.rerun()
-                    else:
-                        st.warning("ملغاة ❌")
-                with c4:
-                    if st.button("حذف نهائي", key=f"del_{inv['id']}"):
-                        st.session_state.invoices.remove(inv)
-                        st.success("تم الحذف بنجاح!")
-                        st.rerun()
-        else:
-            st.info("لا توجد فواتير مسجلة اليوم.")
+if "invoices" in st.session_state and st.session_state.invoices:
+    for inv in st.session_state.invoices:
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.write(f"#{inv['id']} - {inv['customer']}")
+        with c2:
+            st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
+        with c3:
+            if inv.get('status') != 'cancelled':
+                if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
+                    inv['status'] = 'cancelled'
+                    inv['amount'] = 0
+                    st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
+                    st.rerun()
+            else:
+                st.warning("ملغاة ❌")
+        with c4:
+            if st.button("حذف نهائي", key=f"del_{inv['id']}"):
+                st.session_state.invoices.remove(inv)
+                st.success("تم الحذف بنجاح!")
+                st.rerun()
+else:
+    st.info("لا توجد فواتير مسجلة اليوم.")
 
-# --- خارج البلوك تماماً في آخر الملف لإصلاح ألوان التنسيق ---
+# إجبار القائمة الجانبية على إظهار النصوص باللون الأسود لتظهر بوضوح تام
 st.markdown("""
     <style>
-        /* إجبار القائمة الجانبية على إظهار النصوص باللون الأسود لتظهر بوضوح */
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
         [data-testid="stSidebar"] span, 
-        [data-testid="stSidebar"] label {
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] a {
             color: #111111 !important;
             font-size: 16px !important;
             font-weight: bold !important;
-        }
-        /* تعديل خلفية الأيقونات والنصوص المخفية */
-        [data-testid="stSidebarNavigation"] {
-            color: #111111 !important;
         }
     </style>
 """, unsafe_allow_html=True)
