@@ -106,6 +106,50 @@ st.markdown("""
 }
 [data-testid="stDataFrame"], [data-testid="stTable"] {
     background: #fff;
+    color: #17324d !important;
+}
+/* Keep text readable inside dark/black cards and custom dark surfaces. */
+[data-testid="stSidebar"] *,
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] *,
+[style*="background: rgb(0"],
+[style*="background-color: rgb(0"],
+[style*="background:#000"],
+[style*="background: #000"],
+[style*="background-color:#000"],
+[style*="background-color: #000"],
+[style*="background: #111827"],
+[style*="background:#111827"],
+[style*="background: #0f172a"],
+[style*="background:#0f172a"],
+[style*="background: #1f2937"],
+[style*="background:#1f2937"],
+[style*="background: #102b49"],
+[style*="background:#102b49"],
+[style*="background: #173b63"],
+[style*="background:#173b63"],
+[style*="background: rgb(0"] *,
+[style*="background-color: rgb(0"] *,
+[style*="background:#000"] *,
+[style*="background: #000"] *,
+[style*="background-color:#000"] *,
+[style*="background-color: #000"] *,
+[style*="background: #111827"] *,
+[style*="background:#111827"] *,
+[style*="background: #0f172a"] *,
+[style*="background:#0f172a"] *,
+[style*="background: #1f2937"] *,
+[style*="background:#1f2937"] *,
+[style*="background: #102b49"] *,
+[style*="background:#102b49"] *,
+[style*="background: #173b63"] *,
+[style*="background:#173b63"] * {
+    color: #ffffff !important;
+}
+/* Text and values in dark buttons must remain white. */
+.stButton > button[kind="primary"],
+.stDownloadButton > button[kind="primary"] {
+    color: #ffffff !important;
 }
 .sh-hero {
     background: linear-gradient(115deg, #123456, #1b6b78);
@@ -455,26 +499,47 @@ st.session_state.daily_sales = sales_today
 # =============================================================================
 # Dashboard
 # =============================================================================
-if page == "dashboard":
+def render_dashboard():
+    # Read the latest shared JSON data on every dashboard refresh. This lets the
+    # owner's dashboard see invoices created by another logged-in worker session.
+    latest = load_system_data()
+    for key in (
+        "session_state_invoices", "daily_expenses", "daily_archive",
+        "monthly_archive", "workers", "commission_rate", "services", "products",
+    ):
+        if key in latest:
+            st.session_state[key] = latest[key]
+
+    current_invoices = get_all_invoices()
+    current_active = [x for x in current_invoices if x.get("status", "Active") == "Active"]
+    current_refunded = [x for x in current_invoices if x.get("status") == "Refunded"]
+    current_services = [x for x in current_active if x.get("sale_type", "service") == "service"]
+    current_sales = sum(float(x.get("total", 0)) for x in current_active)
+    current_commissions = sum(float(x.get("commission_total", 0)) for x in current_active)
+    current_expenses = sum(float(v) for v in st.session_state.daily_expenses.values())
+    current_vat = current_sales * 0.14
+    current_net = current_sales - current_expenses - current_vat - current_commissions
+    st.session_state.daily_sales = current_sales
+
     st.markdown("""
     <section class="sh-hero">
       <h1>✨ Sabiha Hub | لوحة التحكم</h1>
       <p>متابعة المبيعات والعمولات والمصروفات وحركة السيارات</p>
     </section>""", unsafe_allow_html=True)
-    st.caption(f"🟢 النظام يعمل · {dt.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    st.caption(f"🟢 تحديث تلقائي كل 5 ثوانٍ · آخر تحديث: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     a, b, c, d = st.columns(4)
-    a.metric("💰 المبيعات المحصلة", f"{sales_today:,.2f} ج.م", f"{len(active_invoices)} فاتورة")
-    b.metric("📉 مصروفات اليوم", f"{expenses_today:,.2f} ج.م")
-    c.metric("🏛️ ضريبة 14% تقديرية", f"{vat_today:,.2f} ج.م")
-    d.metric("🚗 سيارات مخدومة", len(service_invoices))
+    a.metric("💰 المبيعات المحصلة", f"{current_sales:,.2f} ج.م", f"{len(current_active)} فاتورة")
+    b.metric("📉 مصروفات اليوم", f"{current_expenses:,.2f} ج.م")
+    c.metric("🏛️ ضريبة 14% تقديرية", f"{current_vat:,.2f} ج.م")
+    d.metric("🚗 سيارات مخدومة", len(current_services))
     e, f, g = st.columns(3)
-    e.metric("👨‍🔧 عمولات الفنيين", f"{commissions_today:,.2f} ج.م")
-    f.metric("🟩 صافي تقديري", f"{net_today:,.2f} ج.م")
-    g.metric("↩️ إجمالي المرتجعات", f"{sum(float(x.get('total',0)) for x in refunded_invoices):,.2f} ج.م")
+    e.metric("👨‍🔧 عمولات الفنيين", f"{current_commissions:,.2f} ج.م")
+    f.metric("🟩 صافي تقديري", f"{current_net:,.2f} ج.م")
+    g.metric("↩️ إجمالي المرتجعات", f"{sum(float(x.get('total',0)) for x in current_refunded):,.2f} ج.م")
     st.info("ملاحظة: الضريبة محسوبة هنا كتقدير 14% من المبيعات. راجع المعالجة الضريبية الفعلية مع المحاسب.")
     st.divider()
     st.subheader("📥 تقرير اليوم")
-    df = invoice_dataframe(invoices)
+    df = invoice_dataframe(current_invoices)
     if not df.empty:
         st.dataframe(df, use_container_width=True, hide_index=True)
         st.download_button(
@@ -484,11 +549,11 @@ if page == "dashboard":
             mime="text/csv",
         )
         report_body = (
-            f"<div class='summary'><p>المبيعات: {sales_today:.2f} ج.م</p>"
-            f"<p>المصروفات: {expenses_today:.2f} ج.م</p>"
-            f"<p>الضريبة التقديرية: {vat_today:.2f} ج.م</p>"
-            f"<p>العمولات: {commissions_today:.2f} ج.م</p>"
-            f"<p>الصافي التقديري: {net_today:.2f} ج.م</p></div>"
+            f"<div class='summary'><p>المبيعات: {current_sales:.2f} ج.م</p>"
+            f"<p>المصروفات: {current_expenses:.2f} ج.م</p>"
+            f"<p>الضريبة التقديرية: {current_vat:.2f} ج.م</p>"
+            f"<p>العمولات: {current_commissions:.2f} ج.م</p>"
+            f"<p>الصافي التقديري: {current_net:.2f} ج.م</p></div>"
             + df.to_html(index=False, border=0)
         )
         st.download_button(
@@ -504,7 +569,7 @@ if page == "dashboard":
     c1, c2 = st.columns(2)
     with c1:
         if st.button("إغلاق وترحيل اليوم الحالي", type="primary", use_container_width=True):
-            if not invoices and expenses_today == 0:
+            if not current_invoices and current_expenses == 0:
                 st.warning("لا توجد معاملات لترحيلها.")
             else:
                 today_key = dt.datetime.now().strftime("%Y-%m-%d (%A)")
@@ -512,13 +577,13 @@ if page == "dashboard":
                     st.error("يوجد أرشيف مسجل لهذا التاريخ بالفعل؛ راجع الأرشيف قبل الإغلاق مرة أخرى.")
                 else:
                     st.session_state.daily_archive[today_key] = {
-                        "sales": sales_today,
-                        "expenses": expenses_today,
-                        "tax": vat_today,
-                        "commissions": commissions_today,
-                        "cars_count": len(service_invoices),
-                        "canceled_total": sum(float(x.get("total", 0)) for x in refunded_invoices),
-                        "net": net_today,
+                        "sales": current_sales,
+                        "expenses": current_expenses,
+                        "tax": current_vat,
+                        "commissions": current_commissions,
+                        "cars_count": len(current_services),
+                        "canceled_total": sum(float(x.get("total", 0)) for x in current_refunded),
+                        "net": current_net,
                         "invoices": deepcopy(st.session_state.session_state_invoices),
                     }
                     st.session_state.session_state_invoices = {}
@@ -542,8 +607,16 @@ if page == "dashboard":
                 st.rerun()
     st.divider()
     st.subheader("📋 الفواتير والمرتجعات")
-    for i, inv in enumerate(invoices):
+    for i, inv in enumerate(current_invoices):
         show_invoice_card(inv, "dash", i)
+
+# Streamlit fragments refresh the dashboard in the background without requiring
+# a manual page reload. Older Streamlit versions fall back to normal rendering.
+if hasattr(st, "fragment"):
+    render_dashboard = st.fragment(run_every="5s")(render_dashboard)
+
+if page == "dashboard":
+    render_dashboard()
 
 
 # =============================================================================
