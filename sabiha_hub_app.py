@@ -646,3 +646,63 @@ if menu == "دفتر المصروفات 💸":
     st.write("### 📊 إجمالي المصروفات المسجلة لليوم:")
     total_exp = sum(st.session_state.daily_expenses.values())
     st.error(f"💸 إجمالي الاستهلاك والمصروفات: {total_exp} ج.م")
+
+# ============================================================================
+# قسم إعدادات الباقات والعمال (مطابق تماماً لمتغير السطر 99 على السيرفر الأونلاين)
+# ============================================================================
+elif menu == "إعدادات الباقات والعمال":
+    st.markdown("## ⚙️ لوحة الإدارة وتحديث الباقات والسرية")
+    st.write("---")
+    
+    # واجهة إدارة الفنيين والعمال
+    st.subheader("👨‍🔧 إدارة الفنيين المسجلين في النظام")
+    col_w1, col_w2 = st.columns(2)
+    
+    with col_w1:
+        new_worker_name = st.text_input("➕ اسم الفني الجديد:")
+        if st.button("تثبيت فني جديد 🚀"):
+            if new_worker_name.strip() != "":
+                if not any(w["name"] == new_worker_name.strip() for w in st.session_state.workers):
+                    st.session_state.workers.append({"name": new_worker_name.strip(), "advance": 0.0})
+                    st.success(f"✅ تم تسجيل الفني [{new_worker_name}] بنجاح في المنظومة!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ هذا الاسم مسجل بالفعل مسبقاً!")
+            else:
+                st.error("❌ يرجى إدخال اسم صحيح!")
+                
+    with col_w2:
+        worker_to_delete = st.selectbox(
+            "❌ حذف عامل نهائياً:",
+            options=["Choose an option"] + [w["name"] for w in st.session_state.workers],
+            index=0
+        )
+        if st.button("حذف الفني 🗑️"):
+            if worker_to_delete != "Choose an option":
+                st.session_state.workers = [w for w in st.session_state.workers if w["name"] != worker_to_delete]
+                st.success(f"🗑️ تم حذف الفني [{worker_to_delete}] وإزالته من الحسابات الحالية.")
+                st.rerun()
+            else:
+                st.error("❌ يرجى اختيار اسم فني لحذفه!")
+
+    st.write("---")
+    
+    # واجهة إدارة وتحديث الباقات والخدمات
+    st.subheader("🛍️ تحديث أسعار الخدمات والباقات")
+    new_service_name = st.text_input("🏷️ اسم الخدمة الجديدة:")
+    
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        price_malaki = st.number_input("🚗 سعر فئة الملاكي (ج.م):", min_value=0, value=100)
+    with col_p2:
+        price_suv = st.number_input("🚙 سعر فئة SUV (ج.م):", min_value=0, value=150)
+        
+    if st.button("تثبيت خدمة جديدة 📥"):
+        if new_service_name.strip() != "":
+            if "services" not in st.session_state:
+                st.session_state.services = {}
+            st.session_state.services[new_service_name.strip()] = {"الملكي": float(price_malaki), "SUV": float(price_suv)}
+            st.success(f"🎉 تم إضافة وتثبيت خدمة [{new_service_name}] بأسعار جديدة!")
+            st.rerun()
+        else:
+            st.error("❌ يرجى كتابة اسم الخدمة أولاً!")
