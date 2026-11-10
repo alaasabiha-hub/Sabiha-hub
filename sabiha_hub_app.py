@@ -237,13 +237,14 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     cancelled_inv = [inv for inv in st.session_state.invoices if inv["status"] == "ملغاة"]
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
+        # --- قسم الأداء المالي والتصنيفات (بمحاذاة 8 مسافات دقيقة للداخل) ---
         col_a, col_b, col_c = st.columns(3)
         with col_a:
-        st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
+            st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
         with col_b:
-        st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
+            st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
         with col_c:
-        st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م")
+            st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م")
 
         st.write("---")
         st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
@@ -272,21 +273,96 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
         else:
             st.info("لا توجد فواتير مسجلة اليوم.")
 
-# --- بناء بقية الصفحات لتظهر عند الضغط عليها في القائمة الجانبية (من أول السطر تماماً جهة اليسار) ---
+# =========================================================================
+# 2️⃣ صفحة كاشير الاستقبال POS (تبدأ من أول السطر تماماً جهة اليسار)
+# =========================================================================
 elif menu == "كاشير الاستقبال POS" and st.session_state.user_role == "owner":
-    st.title("🛒 كاشير الاستقبال POS")
+    st.title("🛒 كاشير الاستقبال POS - Sabiha hub")
     st.write("---")
-    st.info("شاشة الكاشير ونظام نقطة البيع جاهز لإضافة محتواك.")
+    
+    # تهيئة مصفوفة الخدمات إذا لم تكن موجودة
+    if "services" not in st.session_state:
+        st.session_state.services = [
+            {"name": "غسيل سجاد عادي", "price": 50},
+            {"name": "غسيل سجاد بالبخار", "price": 80},
+            {"name": "تطهير وتعقيم", "price": 30}
+        ]
+        
+    with st.form("pos_form", clear_on_submit=True):
+        customer_name = st.text_input("اسم العميل:")
+        selected_service = st.selectbox("اختر الخدمة المطلوبة:", [s["name"] for s in st.session_state.services])
+        payment_method = st.selectbox("طريقة الدفع:", ["كاش", "فيزا"])
+        
+        # جلب سعر الخدمة المختارة
+        price = next((s["price"] for s in st.session_state.services if s["name"] == selected_service), 0)
+        st.write(f"💰 **تكلفة الخدمة المستحقة:** {price} ج.م")
+        
+        submit_invoice = st.form_submit_submit_button = st.form_submit_button("إصدار الفاتورة وتثبيتها")
+        
+        if submit_invoice:
+            if customer_name:
+                new_id = len(st.session_state.invoices) + 1 if "invoices" in st.session_state else 1
+                new_inv = {
+                    "id": new_id,
+                    "customer": customer_name,
+                    "service": selected_service,
+                    "amount": price,
+                    "payment_method": payment_method,
+                    "status": "نشطة"
+                }
+                if "invoices" not in st.session_state:
+                    st.session_state.invoices = []
+                st.session_state.invoices.append(new_inv)
+                st.success(f"✅ تم إصدار الفاتورة رقم #{new_id} بنجاح!")
+                st.rerun()
+            else:
+                st.error("يرجى كتابة اسم العميل لإصدار الفاتورة!")
 
+# =========================================================================
+# 3️⃣ صفحة إعدادات الباقات والخدمات والعمال (تبدأ من أول السطر تماماً جهة اليسار)
+# =========================================================================
 elif menu == "إعدادات الباقات والعمال" and st.session_state.user_role == "owner":
-    st.title("⚙️ إعدادات الباقات والخدمات")
+    st.title("⚙️ إدارة خدمات وباقات وعمال المغسلة")
     st.write("---")
-    st.info("شاشة إدارة الخدمات والباقات والعمال المتاحة بالمغسلة.")
+    
+    if "services" not in st.session_state:
+        st.session_state.services = []
+        
+    st.subheader("➕ إضافة خدمة أو باقة جديدة")
+    with st.form("service_form", clear_on_submit=True):
+        new_service_name = st.text_input("اسم الخدمة الجديدة (مثل: غسيل سجاد موكيت):")
+        new_service_price = st.number_input("سعر الخدمة (ج.م):", min_value=0, value=50)
+        submit_service = st.form_submit_button("حفظ وإضافة الخدمة للنظام")
+        
+        if submit_service and new_service_name:
+            st.session_state.services.append({"name": new_service_name, "price": new_service_price})
+            st.success(f"تم إضافة خدمة '{new_service_name}' بنجاح!")
+            st.rerun()
 
-# --- تنظيف وإصلاح ألوان الثيم والخانات والقائمة الجانبية (من أول السطر تماماً جهة اليسار) ---
+    st.write("---")
+    st.subheader("📋 الخدمات الحالية والتحكم بها (حذف وتعطيل)")
+    
+    if st.session_state.services:
+        for s in st.session_state.services:
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                st.write(f"🔹 **{s['name']}**")
+            with col2:
+                st.write(f"{s['price']} ج.م")
+            with col3:
+                if st.button("حذف الخدمة", key=f"del_ser_{s['name']}"):
+                    st.session_state.services.remove(s)
+                    st.success("تم حذف الخدمة من القائمة!")
+                    st.rerun()
+    else:
+        st.info("لا توجد خدمات مضافة حالياً في النظام.")
+
+# =========================================================================
+# 4️⃣ كود إصلاح الألوان والخلفيات البيضاء نهائياً (خارج الشروط في نهاية الملف)
+# =========================================================================
 st.markdown("""
     <style>
-        /* إجبار القائمة الجانبية على إظهار النصوص باللون الأسود الداكن بوضوح */
+        /* إجبار نصوص القائمة الجانبية على اللون الأسود */
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
         [data-testid="stSidebar"] span, 
         [data-testid="stSidebar"] label,
@@ -295,14 +371,18 @@ st.markdown("""
             font-size: 15px !important;
             font-weight: bold !important;
         }
-        /* إصلاح الخانات البيضاء ليكون النص المكتوب داخلها أسود واضح جداً */
-        input, select, textarea, div[data-baseweb="input"] input {
+        /* حل مشكلة النص الأبيض داخل الخانات البيضاء - إجبار النص والمدخلات على اللون الأسود الداكن */
+        input, select, textarea, div[data-baseweb="input"] input, .stSelectbox div {
             color: #111111 !important;
             background-color: #ffffff !important;
             -webkit-text-fill-color: #111111 !important;
         }
-        /* إصلاح نصوص التنبيهات والمقاييس لكي تظهر بوضوح */
-        .stAlert p, [data-testid="stMetricValue"] {
+        /* ضبط نصوص المقاييس والتنبيهات المذكورة في الشاشة */
+        .stAlert p, [data-testid="stMetricValue"], [data-testid="stMetricLabel"] {
+            color: #111111 !important;
+        }
+        /* إصلاح نصوص عناصر الاستمارات والجداول */
+        label, p, span, h1, h2, h3 {
             color: #111111 !important;
         }
     </style>
