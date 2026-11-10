@@ -648,83 +648,194 @@ if menu == "دفتر المصروفات 💸":
     st.error(f"💸 إجمالي الاستهلاك والمصروفات: {total_exp} ج.م")
 
 # ============================================================================
-# قسم إعدادات الباقات والعمال (نسخة آمنة تماماً ومقاومة لتضارب أنواع البيانات)
+# 1. قسم كاشير الاستقبال (POS) - مصحح ومطابق لمتغيرات القائمة الجانبية الحالية
+# ============================================================================
+elif menu == "كاهير الاستقبال والخدمات" or menu == "كاشير الاستقبال POS":
+    st.markdown("## 🛒 نظام كاشير الاستقبال وتسجيل العمليات")
+    st.write("---")
+    
+    # تهيئة المتغيرات الأساسية بالحسابات إن لم تكن موجودة
+    if "session_state_invoices" not in st.session_state:
+        st.session_state.session_state_invoices = {}
+    if "workers" not in st.session_state:
+        st.session_state.workers = []
+    if "services" not in st.session_state:
+        st.session_state.services = {
+            "غسيل كامل": {"الملكي": 150.0, "SUV": 200.0},
+            "تلميع سريع": {"الملكي": 300.0, "SUV": 400.0}
+        }
+    if "daily_sales" not in st.session_state:
+        st.session_state.daily_sales = 0.0
+
+    st.subheader("📝 تسجيل فاتورة جديدة")
+    
+    worker_list = [w["name"] for w in st.session_state.workers if isinstance(w, dict) and "name" in w]
+    if not worker_list:
+        st.warning("⚠️ تنبيه: لا يوجد فنيين مسجلين في النظام حالياً. أضف فنيين من لوحة الإعدادات لحساب عمولاتهم.")
+        worker_list = ["لا يوجد فني مسؤول"]
+
+    selected_worker = st.selectbox("👤 اختر الفني المسؤول:", options=worker_list)
+    
+    service_options = list(st.session_state.services.keys())
+    if not service_options:
+        st.error("❌ لا توجد خدمات مسجلة في النظام.")
+        service_options = ["لا توجد خدمات"]
+        
+    selected_service = st.selectbox("🛍️ اختر الخدمة المطلوبة:", options=service_options)
+    car_type = st.radio("🚗 نوع فئة السيارة:", options=["الملكي", "SUV"], horizontal=True)
+    
+    if selected_service in st.session_state.services:
+        base_price = float(st.session_state.services[selected_service].get(car_type, 0.0))
+    else:
+        base_price = 0.0
+        
+    st.info(f"💵 السعر الافتراضي للخدمة: {base_price} ج.م")
+    
+    custom_price = st.number_input("💰 القيمة الإجمالية المحصلة (ج.م):", min_value=0.0, value=base_price)
+    commission_rate = st.slider("🎯 نسبة عمولة الفني (%) :", min_value=0, max_value=100, value=10)
+    calculated_commission = (commission_rate / 100) * custom_price
+    
+    st.write(f"📊 صافي عمولة الفني المحسوبة: **{calculated_commission:.2f} ج.م**")
+    
+    if st.button("إتمام العملية وطباعة الفاتورة 🖨️"):
+        if selected_service == "لا توجد خدمات" or selected_worker == "لا يوجد فني مسؤول":
+            st.error("❌ لا يمكن إتمام المعاملة بدون فني وخدمات مسجلة.")
+        else:
+            import datetime
+            invoice_id = f"INV-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+            invoice_data = {
+                "id": invoice_id,
+                "service": selected_service,
+                "car_type": car_type,
+                "total": custom_price,
+                "worker": selected_worker,
+                "commission": calculated_commission,
+                "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            if selected_worker not in st.session_state.session_state_invoices:
+                st.session_state.session_state_invoices[selected_worker] = []
+            st.session_state.session_state_invoices[selected_worker].append(invoice_data)
+            
+            st.session_state.daily_sales += custom_price
+            
+            st.success(f"🎉 تم إتمام المعاملة وتحديث المبيعات والعمولات حياً! رقم الفاتورة: {invoice_id}")
+            st.balloons()
+            st.rerun()
+
+# ============================================================================
+# 2. قسم دفتر المصروفات المطور (إيجار - مصروفات تشغيلية - كهرباء وماء)
+# ============================================================================
+elif menu == "📑 دفتر المصروفات":
+    st.markdown("## 📑 إدارة دفتر المصروفات والتشغيل اليومي")
+    st.write("---")
+    
+    if "daily_expenses" not in st.session_state or not isinstance(st.session_state.daily_expenses, dict):
+        st.session_state.daily_expenses = {"rent": 0.0, "operational": 0.0, "utilities": 0.0}
+        
+    st.subheader("🛠️ تحديث قيم المصروفات الحالية")
+    
+    with st.form("expenses_form"):
+        rent_val = st.number_input("🏢 إيجار المقر / المحل (ج.م):", min_value=0.0, value=float(st.session_state.daily_expenses.get("rent", 0.0)))
+        operational_val = st.number_input("🧪 مصروفات تشغيلية (خامات ومواد كيميائية):", min_value=0.0, value=float(st.session_state.daily_expenses.get("operational", 0.0)))
+        utilities_val = st.number_input("⚡💧 مرافق عامة (كهرباء وماء):", min_value=0.0, value=float(st.session_state.daily_expenses.get("utilities", 0.0)))
+        
+        if st.form_submit_button("💾 حفظ وتحديث دفتر المصروفات"):
+            st.session_state.daily_expenses["rent"] = rent_val
+            st.session_state.daily_expenses["operational"] = operational_val
+            st.session_state.daily_expenses["utilities"] = utilities_val
+            st.success("🎉 تم تحديث وحفظ قيم المصروفات بنجاح!")
+            st.rerun()
+            
+    st.write("---")
+    st.markdown("### 📊 إجمالي المصروفات المسجلة لليوم:")
+    total_exp = float(st.session_state.daily_expenses.get("rent", 0.0)) + float(st.session_state.daily_expenses.get("operational", 0.0)) + float(st.session_state.daily_expenses.get("utilities", 0.0))
+                
+    col_e1, col_e2, col_e3 = st.columns(3)
+    with col_e1: st.metric("🏢 الإيجار", f"{st.session_state.daily_expenses.get('rent', 0.0):.2f} ج.م")
+    with col_e2: st.metric("🧪 مصروفات تشغيل", f"{st.session_state.daily_expenses.get('operational', 0.0):.2f} ج.م")
+    with col_e3: st.metric("⚡💧 كهرباء وماء", f"{st.session_state.daily_expenses.get('utilities', 0.0):.2f} ج.م")
+    st.error(f"🚨 إجمالي المصروفات العام: **{total_exp:.2f} ج.م**")
+
+# ============================================================================
+# 3. قسم إعدادات الباقات والعمال والتحكم بكلمات السر والخدمات والأسعار
 # ============================================================================
 elif menu == "إعدادات الباقات والعمال":
     st.markdown("## ⚙️ لوحة الإدارة وتحديث الباقات والسرية")
     st.write("---")
     
-    # التأكد من تهيئة متغير العمال في الذاكرة بشكل سليم وقاطع
     if "workers" not in st.session_state or not isinstance(st.session_state.workers, list):
         st.session_state.workers = []
-    
-    # واجهة إدارة الفنيين والعمال
-    st.subheader("👨‍🔧 إدارة الفنيين المسجلين في النظام")
-    col_w1, col_w2 = st.columns(2)
-    
-    with col_w1:
-        new_worker_name = st.text_input("➕ اسم الفني الجديد:")
-        if st.button("تثبيت فني جديد 🚀"):
-            if new_worker_name.strip() != "":
-                # حماية الفحص لضمان التعامل مع القواميس داخل القائمة
-                worker_exists = False
-                for w in st.session_state.workers:
-                    if isinstance(w, dict) and w.get("name") == new_worker_name.strip():
-                        worker_exists = True
-                        break
-                
-                if not worker_exists:
-                    st.session_state.workers.append({"name": new_worker_name.strip(), "advance": 0.0})
-                    st.success(f"✅ تم تسجيل الفني [{new_worker_name}] بنجاح في المنظومة!")
-                    st.rerun()
-                else:
-                    st.warning("⚠️ هذا الاسم مسجل بالفعل مسبقاً!")
-            else:
-                st.error("❌ يرجى إدخال اسم صحيح!")
-                
-    with col_w2:
-        # بناء خيارات القائمة بشكل حذر جداً لتفادي خطأ TypeError تماماً
-        worker_options = ["Choose an option"]
-        for w in st.session_state.workers:
-            if isinstance(w, dict) and "name" in w:
-                worker_options.append(w["name"])
-            elif isinstance(w, str):
-                worker_options.append(w)
-            
-        worker_to_delete = st.selectbox(
-            "❌ حذف عامل نهائياً:",
-            options=worker_options,
-            index=0
-        )
-        if st.button("حذف الفني 🗑️"):
-            if worker_to_delete != "Choose an option":
-                st.session_state.workers = [
-                    w for w in st.session_state.workers 
-                    if (isinstance(w, dict) and w.get("name") != worker_to_delete) or (isinstance(w, str) and w != worker_to_delete)
-                ]
-                st.success(f"🗑️ تم حذف الفني [{worker_to_delete}] وإزالته من الحسابات الحالية.")
-                st.rerun()
-            else:
-                st.error("❌ يرجى اختيار اسم فني لحذفه!")
+    if "services" not in st.session_state or not isinstance(st.session_state.services, dict):
+        st.session_state.services = {}
+    if "credentials" not in st.session_state:
+        st.session_state.credentials = {
+            "owner": {"username": "owner", "password": "sabiha2026"},
+            "worker": {"username": "worker", "password": "pos123"}
+        }
 
-    st.write("---")
+    tab_workers, tab_services, tab_security = st.tabs(["👨‍🔧 إدارة الفنيين", "🛍️ التحكم بالخدمات والأسعار", "🔐 إدارة الحسابات وكلمات السر"])
     
-    # واجهة إدارة وتحديث الباقات والخدمات
-    st.subheader("🛍️ تحديث أسعار الخدمات والباقات")
-    new_service_name = st.text_input("🏷️ اسم الخدمة الجديدة:")
-    
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-        price_malaki = st.number_input("🚗 سعر فئة الملاكي (ج.م):", min_value=0, value=100)
-    with col_p2:
-        price_suv = st.number_input("🚙 سعر فئة SUV (ج.م):", min_value=0, value=150)
-        
-    if st.button("تثبيت خدمة جديدة 📥"):
-        if new_service_name.strip() != "":
-            if "services" not in st.session_state:
-                st.session_state.services = {}
-            st.session_state.services[new_service_name.strip()] = {"الملكي": float(price_malaki), "SUV": float(price_suv)}
-            st.success(f"🎉 تم إضافة وتثبيت خدمة [{new_service_name}] بأسعار جديدة!")
-            st.rerun()
-        else:
-            st.error("❌ يرجى كتابة اسم الخدمة أولاً!")
+    with tab_workers:
+        st.subheader("👥 تسجيل وحذف الفنيين والعمال")
+        col_w1, col_w2 = st.columns(2)
+        with col_w1:
+            new_worker_name = st.text_input("➕ اسم الفني الجديد:")
+            if st.button("تثبيت فني جديد 🚀"):
+                if new_worker_name.strip() != "":
+                    if not any(isinstance(w, dict) and w.get("name") == new_worker_name.strip() for w in st.session_state.workers):
+                        st.session_state.workers.append({"name": new_worker_name.strip(), "advance": 0.0})
+                        st.success(f"✅ تم تسجيل الفني [{new_worker_name}] بنجاح!")
+                        st.rerun()
+                else:
+                    st.error("❌ يرجى إدخال اسم صحيح!")
+        with col_w2:
+            worker_options = ["Choose an option"]
+            for w in st.session_state.workers:
+                if isinstance(w, dict) and "name" in w: worker_options.append(w["name"])
+            worker_to_delete = st.selectbox("❌ حذف عامل نهائياً:", options=worker_options, index=0)
+            if st.button("حذف الفني 🗑️"):
+                if worker_to_delete != "Choose an option":
+                    st.session_state.workers = [w for w in st.session_state.workers if isinstance(w, dict) and w.get("name") != worker_to_delete]
+                    st.success(f"🗑️ تم حذف الفني [{worker_to_delete}] بنجاح.")
+                    st.rerun()
+
+    with tab_services:
+        st.subheader("🛍️ إدارة وتحديث وحذف الخدمات والأسعار")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        with col_s1: new_service_name = st.text_input("🏷️ اسم الخدمة الجديدة:")
+        with col_s2: price_malaki = st.number_input("🚗 سعر فئة الملاكي (ج.م):", min_value=0.0, value=100.0)
+        with col_s3: price_suv = st.number_input("🚙 سعر فئة SUV (ج.م):", min_value=0.0, value=150.0)
+            
+        if st.button("تثبيت أو تحديث السعر 📥"):
+            if new_service_name.strip() != "":
+                st.session_state.services[new_service_name.strip()] = {"الملكي": float(price_malaki), "SUV": float(price_suv)}
+                st.success(f"🎉 تم حفظ وتحديث أسعار خدمة [{new_service_name}] بنجاح!")
+                st.rerun()
+                
+        st.write("---")
+        for service, prices in list(st.session_state.services.items()):
+            col_info, col_del = st.columns([4, 1])
+            with col_info: st.write(f"🔹 **{service}** ➡️ الملاكي: `{prices.get('الملكي', 0)} ج.م` | SUV: `{prices.get('SUV', 0)} ج.م`")
+            with col_del:
+                if st.button(f"حذف 🗑️", key=f"del_{service}"):
+                    del st.session_state.services[service]
+                    st.success(f"🗑️ تم حذف الخدمة.")
+                    st.rerun()
+
+    with tab_security:
+        st.subheader("🔐 تعديل بيانات الدخول")
+        new_owner_user = st.text_input("👤 اسم مستخدم المالك الجديد:", value=st.session_state.credentials["owner"]["username"])
+        new_owner_pass = st.text_input("🔑 كلمة سر المالك الجديدة:", type="password")
+        if st.button("تحديث حساب المالك 💾"):
+            st.session_state.credentials["owner"]["username"] = new_owner_user
+            if new_owner_pass.strip() != "": st.session_state.credentials["owner"]["password"] = new_owner_pass
+            st.success("✅ تم تحديث بيانات دخول المالك!")
+            
+        st.write("---")
+        new_worker_user = st.text_input("👤 اسم مستخدم الكاشير الجديد:", value=st.session_state.credentials["worker"]["username"])
+        new_worker_pass = st.text_input("🔑 كلمة سر الكاشير الجديدة:", type="password")
+        if st.button("تحديث حساب الكاشير 💾"):
+            st.session_state.credentials["worker"]["username"] = new_worker_user
+            if new_worker_pass.strip() != "": st.session_state.credentials["worker"]["password"] = new_worker_pass
+            st.success("✅ تم تحديث بيانات دخول الكاشير!")
