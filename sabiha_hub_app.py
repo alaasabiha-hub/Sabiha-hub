@@ -518,14 +518,17 @@ st.success(f"✅ تم مسح وتصفير سلفة الفني {selected_worker} 
 st.rerun()
 st.write("---")
 st.subheader("📋 جدول الرواتب وعمولات مستحقات العمال الإجمالية الحالية")
-for w in st.session_state.workers:
-# حساب صافي المستحق الإجمالي للعمال بعد خصم السلفيات
-net_worker_pay = w["commission_rate"] - w["advance"]
-st.write(f"👤 الفني: {w['name']} | 💰 العمولات المكتسبة: {w['commission_rate']} ج.م | 🛑 السلفيات المسحوبة:{w['advance']} ج.م | 💵 صافي المستحق للصرف: {net_worker_pay} ج.م")
+        for w in st.session_state.workers:
+            net_worker_pay = w["commission_rate"] - w["advance"]
+            st.write(f"### 👤 الفني: {w['name']}")
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                st.metric("إجمالي العمولات المكتسبة", f"{w['commission_rate']} ج.م")
+            with col_m2:
+                st.metric("السحوبات والسلفيات الحالية", f"{w['advance']} ج.م")
+            with col_m3:
+                st.metric("الصافي المستحق للدفع", f"{net_worker_pay} ج.m")
 
-#=========================================================================
-
-# =========================================================================
 # 3️⃣ شاشة كشف حساب العمولات والسلفيات الحية 👥
 # =========================================================================
 elif menu == "كشف العمولات والسلفيات الحية":
