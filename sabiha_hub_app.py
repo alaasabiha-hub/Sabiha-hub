@@ -237,55 +237,79 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     cancelled_inv = [inv for inv in st.session_state.invoices if inv["status"] == "ملغاة"]
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
-# --- كود مستقل تماماً لحماية لوحة التحكم والألوان ---
-try:
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        st.metric("إجمالي المبيعات", f"{total_sales} ج.م" if 'total_sales' in locals() or 'total_sales' in globals() else "0 ج.م")
-    with col_b:
-        st.metric("المبيعات الكاش", f"{cash_sales} ج.م" if 'cash_sales' in locals() or 'cash_sales' in globals() else "0 ج.م")
-    with col_c:
-        st.metric("مبيعات الفيزا", f"{visa_sales} ج.م" if 'visa_sales' in locals() or 'visa_sales' in globals() else "0 ج.م")
-except Exception as e:
-    pass
+        # --- تنظيف وإصلاح ألوان الثيم والخانات والقائمة الجانبية ---
+        st.markdown("""
+            <style>
+                /* إجبار القائمة الجانبية على إظهار النصوص باللون الأسود الداكن بوضوح */
+                [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
+                [data-testid="stSidebar"] span, 
+                [data-testid="stSidebar"] label,
+                [data-testid="stSidebar"] a {
+                    color: #111111 !important;
+                    font-size: 15px !important;
+                    font-weight: bold !important;
+                }
+                /* إصلاح الخانات البيضاء ليكون النص المكتوب داخلها أسود واضح جداً */
+                input, select, textarea, div[data-baseweb="input"] input {
+                    color: #111111 !important;
+                    background-color: #ffffff !important;
+                    -webkit-text-fill-color: #111111 !important;
+                }
+                /* إصلاح نصوص التنبيهات */
+                .stAlert p {
+                    color: #111111 !important;
+                }
+            </style>
+        """, unsafe_allow_html=True)
 
-st.write("---")
-st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
+        # حساب وبناء مربعات الأداء لليوم (تكملة لصفحة الأداء لليوم الحالية)
+        try:
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                st.metric("إجمالي Mبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
+            with col_b:
+                st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
+            with col_c:
+                st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م")
+        except:
+            pass
 
-if "invoices" in st.session_state and st.session_state.invoices:
-    for inv in st.session_state.invoices:
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.write(f"#{inv['id']} - {inv['customer']}")
-        with c2:
-            st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
-        with c3:
-            if inv.get('status') != 'cancelled':
-                if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
-                    inv['status'] = 'cancelled'
-                    inv['amount'] = 0
-                    st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
-                    st.rerun()
-            else:
-                st.warning("ملغاة ❌")
-        with c4:
-            if st.button("حذف نهائي", key=f"del_{inv['id']}"):
-                st.session_state.invoices.remove(inv)
-                st.success("تم الحذف بنجاح!")
-                st.rerun()
-else:
-    st.info("لا توجد فواتير مسجلة اليوم.")
+        st.write("---")
+        st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
 
-# إجبار القائمة الجانبية على إظهار النصوص باللون الأسود لتظهر بوضوح تام
-st.markdown("""
-    <style>
-        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
-        [data-testid="stSidebar"] span, 
-        [data-testid="stSidebar"] label,
-        [data-testid="stSidebar"] a {
-            color: #111111 !important;
-            font-size: 16px !important;
-            font-weight: bold !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+        if "invoices" in st.session_state and st.session_state.invoices:
+            for inv in st.session_state.invoices:
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.write(f"#{inv['id']} - {inv['customer']}")
+                with c2:
+                    st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
+                with c3:
+                    if inv.get('status') != 'cancelled':
+                        if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
+                            inv['status'] = 'cancelled'
+                            inv['amount'] = 0
+                            st.success(f"تم إلغاء الفاتورة رقم {inv['id']}")
+                            st.rerun()
+                    else:
+                        st.warning("ملغاة ❌")
+                with c4:
+                    if st.button("حذف نهائي", key=f"del_{inv['id']}"):
+                        st.session_state.invoices.remove(inv)
+                        st.success("تم الحذف بنجاح!")
+                        st.rerun()
+        else:
+            st.info("لا توجد فواتير مسجلة اليوم.")
+
+# --- بناء بقية الصفحات لتظهر عند الضغط عليها في القائمة الجانبية (خارج شرط الأداء لليوم) ---
+elif menu == "كاشير الاستقبال POS" and st.session_state.user_role == "owner":
+    st.title("🛒 كاشير الاستقبال POS")
+    st.write("---")
+    # هنا شاشة الكاشير لإنشاء فواتير جديدة
+    st.info("شاشة الكاشير ونظام نقطة البيع جاهز لإضافة محتواك.")
+
+elif menu == "إعدادات الباقات والعمال" and st.session_state.user_role == "owner":
+    st.title("⚙️ إعدادات الباقات والخدمات")
+    st.write("---")
+    # هنا شاشة التحكم بالخدمات والباقات وحذفها
+    st.info("شاشة إدارة الخدمات والباقات والعمال المتاحة بالمغسلة.")
