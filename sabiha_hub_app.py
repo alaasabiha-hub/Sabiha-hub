@@ -418,9 +418,10 @@ elif menu == "POS كاشير الاستقبال والخدمات":
         service_names = [s["name"] for s in st.session_state.services]
         selected_service = st.selectbox("اختر الخدمة المعتمدة:", service_names if service_names else ["غسيل سريع"])
         
-        worker_names = [w["name"] for w in st.session_state.workers]
+        worker_names = [w["name"] for w in st.session_state.workers if isinstance(w, dict) and "name" in w]
         active_worker = st.selectbox("فني حارة الغسيل:", worker_names if worker_names else ["أحمد مصطفى"])
         detailer_worker = st.selectbox("أخصائي الديتيلينج:", worker_names if worker_names else ["أحمد مصطفى"])
+
         
         payment_method = st.radio("وسيلة السداد:", ["كاش", "فيزا"], horizontal=True)
         
