@@ -648,11 +648,15 @@ if menu == "دفتر المصروفات 💸":
     st.error(f"💸 إجمالي الاستهلاك والمصروفات: {total_exp} ج.م")
 
 # ============================================================================
-# قسم إعدادات الباقات والعمال (مطابق تماماً لمتغير السطر 99 على السيرفر الأونلاين)
+# قسم إعدادات الباقات والعمال (نسخة آمنة ومقاومة للأخطاء على السيرفر الأونلاين)
 # ============================================================================
 elif menu == "إعدادات الباقات والعمال":
     st.markdown("## ⚙️ لوحة الإدارة وتحديث الباقات والسرية")
     st.write("---")
+    
+    # التأكد من تهيئة متغير العمال في الذاكرة لتجنب الأخطاء
+    if "workers" not in st.session_state:
+        st.session_state.workers = []
     
     # واجهة إدارة الفنيين والعمال
     st.subheader("👨‍🔧 إدارة الفنيين المسجلين في النظام")
@@ -672,9 +676,14 @@ elif menu == "إعدادات الباقات والعمال":
                 st.error("❌ يرجى إدخال اسم صحيح!")
                 
     with col_w2:
+        # بناء خيارات القائمة بشكل آمن لتفادي خطأ TypeError
+        worker_options = ["Choose an option"]
+        if st.session_state.workers:
+            worker_options += [w["name"] for w in st.session_state.workers]
+            
         worker_to_delete = st.selectbox(
             "❌ حذف عامل نهائياً:",
-            options=["Choose an option"] + [w["name"] for w in st.session_state.workers],
+            options=worker_options,
             index=0
         )
         if st.button("حذف الفني 🗑️"):
