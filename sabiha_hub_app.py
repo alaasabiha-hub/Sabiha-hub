@@ -549,7 +549,7 @@ elif menu == "العمولات والسلفيات الحية 👥":
 
 st.write("---")
 
-elif menu == "دفتر المصروفات 💸":
+if menu == "دفتر المصروفات 💸":
     st.markdown("## 💸 إدارة دفتر المصروفات اليومية والتشغيلية")
     st.write("---")
 
@@ -560,17 +560,7 @@ elif menu == "دفتر المصروفات 💸":
                     worker["advance"] += advance_amount
                     st.success(f"تم تسجيل سلفة بقيمة {advance_amount} ج.م للعامل {w_name}")
                     st.rerun()
-    else:
-        st.info("لا يوجد عمال مسجلين في النظام حالياً.")
 
-elif menu == "دفتر المصروفات 💸":
-    st.markdown("## 💸 إدارة دفتر المصروفات اليومية والتشغيلية")
-    st.write("---")
-    with st.form("expenses_form"):
-        save_exp = st.form_submit_button("💾 حفظ وتحديث دفتر المصروفات")
-        if save_exp:
-            st.session_state.daily_expenses["rent"] = rent
-            st.session_state.daily_expenses["chemicals"] = chemicals
             st.session_state.daily_expenses["others"] = others
             st.success("🎉 تم تحديث وحفظ قيم المصروفات التشغيلية لليوم بنجاح!")
             st.rerun()
