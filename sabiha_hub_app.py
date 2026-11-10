@@ -502,17 +502,17 @@ elif menu == "تقرير الحسابات الشهرية":
         # تتيح للمالك مسح وتعديل السلفية المدفوعة للفني وتصحيح الحسابات
         worker_list = [w["name"] for w in st.session_state.workers]
         selected_worker = st.selectbox("👤 اسم الفني لربط وإدارة السلفة الحالية:", worker_list if worker_list else ["أحمد مصطفي"])
+        # تتيح للمالك مسح وتعديل السلفية المدفوعة للفني وتصحيح الحسابات
+        worker_list = [w["name"] for w in st.session_state.workers]
+        selected_worker = st.selectbox("👤 اسم الفني لربط وإدارة السلفة الحالية:", worker_list if worker_list else ["أحمد مصطفي"])
         advance_amount = st.number_input("💵 مبلغ السلفة للخصم أو التسوية (ج.م):", min_value=0, value=0)
         col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("❌ تأكيد الخصم / تسجيل سلفة جديدة"):
+                for w in st.session_state.workers:
+                    if w["name"] == selected_worker:
+                        w["advance"] += advance_amount
 
-    if w["name"] == selected_worker:
-    w["advance"] += advance_amount
-st.success(f"تم إدراج سلفة بقيمة {advance_amount} ج.م للفني {selected_worker}")
-st.rerun()
-with col_btn2:
-if st.button("🗑️ مسح وتصفير السلفة تماماً"):
-for w in st.session_state.workers:
-if w["name"] == selected_worker:
 w["advance"] = 0
 st.success(f"✅ تم مسح وتصفير سلفة الفني {selected_worker} بنجاح واكتملت التسوية!")
 st.rerun()
