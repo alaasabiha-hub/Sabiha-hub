@@ -165,7 +165,7 @@ current_day_ar = arabic_days.get(day_name_en, day_name_en)
 if not st.session_state.logged_in:
     st.subheader("🔐 تسجيل الدخول إلى نظام Sabiha Hub")
     col_login = st.columns(1)
-    with col_login:
+    with col_login[0]:
         username = st.text_input("اسم المستخدم:")
         password = st.text_input("كلمة المرور:", type="password")
         if st.button("🔑 دخول النظام"):
