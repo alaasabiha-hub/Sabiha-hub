@@ -411,40 +411,58 @@ elif menu == "POS كاشير الاستقبال والخدمات":
         
         if submit_invoice:
             # حساب سعر الخدمة بناءً على نوع المركبة المختارة
-            base_price = 100
-            for s in st.session_state.services:
-                if s["name"] == selected_service:
-                    base_price = s["price_sedan"] if "ملاكي" in car_type else s["price_suv"]
-            
-            # إضافة سعر المنتج المختار بدون عمولة عمالية
-            product_price = 0
-            if selected_product != "لا يوجد":
-                product_price = next((p["price"] for p in st.session_state.products if p["name"] == selected_product), 0)
+elif menu == "POS كاشير الاستقبال والخدمات":
+    st.markdown("## 🛒 كاشير الاستقبال وتسجيل الفواتير")
+    st.write("---")
+    
+    with st.form("pos_invoice_form"):
+        car_plate = st.text_input("رقم لوحة السيارة:")
+        car_type = st.selectbox("فئة حجم السيارة للتسعير الآلي:", ["ملاكي / سيدان", "SUV / جيب"])
+        
+        service_names = [s["name"] for s in st.session_state.services]
+        selected_service = st.selectbox("اختر الخدمة المطلوبة:", service_names)
+        
+        worker_names = [w["name"] for w in st.session_state.workers]
+        selected_worker = st.selectbox("العامل المسؤول عن التنفيذ:", worker_names)
+        
+        payment_method = st.selectbox("طريقة الدفع:", ["كاش", "فيزا"])
+        
+        submitted = st.form_submit_button("إصدار الفاتورة وتثبيتها الحسابي 🧾")
+        
+        if submitted:
+            if car_plate:
+                service_details = next(s for s in st.session_state.services if s["name"] == selected_service)
+                price = service_details["price_sedan"] if car_type == "ملاكي / سيدان" else service_details["price_suv"]
                 
-            final_amount = base_price + product_price
-            
-            # حساب عمولة العامل الفنية الافتراضية للخدمة فقط (10%)
-            commission_value = int(base_price * 0.10)
-            new_invoice_id = len(st.session_state.invoices) + 1
-invoice_data = {
-"id": new_invoice_id,
-"car_plate": car_plate if car_plate else "N/A",
-"service": selected_service,
-"product": selected_product,
-"amount": final_amount,
-"commission": commission_value,
-"worker": active_worker,
-"payment_method": payment_method,
-"status": "نشطة"
-}
-st.session_state.invoices.append(invoice_data)
-# تحديث محفظة عمولات الفني مباشرة بالنظام
-        for w in st.session_state.workers:
-            if w["name"] == selected_worker:
-                w["commission_rate"] += commission
-        st.success(f"🎉 تم تسجيل الفاتورة #{new_id} بنجاح بقيمة {price} ج.م!")
-        st.rerun()
-
+                worker_details = next(w for w in st.session_state.workers if w["name"] == selected_worker)
+                commission = (price * worker_details["commission_rate"]) / 100
+                
+                new_id = len(st.session_state.invoices) + 1
+                
+                invoice_data = {
+                    "id": new_id,
+                    "car_plate": car_plate,
+                    "car_type": car_type,
+                    "service": selected_service,
+                    "worker": selected_worker,
+                    "amount": price,
+                    "commission": commission,
+                    "payment_method": payment_method,
+                    "status": "نشطة",
+                    "date": current_date_str,
+                    "time": current_time_str
+                }
+                
+                st.session_state.invoices.append(invoice_data)
+                
+                for w in st.session_state.workers:
+                    if w["name"] == selected_worker:
+                        w["advance"] += 0  # أو أي عملية تريدها تحديثاً لبياناته المباشرة
+                
+                st.success(f"🎉 تم تسجيل الفاتورة #{new_id} بنجاح بقيمة {price} ج.م!")
+                st.rerun()
+            else:
+                st.error("يرجى إدخال رقم لوحة السيارة لإتمام العملية.")
 
 =========================================================================
 
