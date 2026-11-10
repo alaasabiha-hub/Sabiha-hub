@@ -238,13 +238,13 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
             # --- قسم الأداء المالي والتصنيفات ---
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("إجمالي المبيعات", f"{total_sales} ج.م")
-        with col_b:
-            st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
-        with col_c:
-            st.metric("مبيعات الفيزا", f"{visa_sales} ج.م")
+col_a, col_b, col_c = st.columns(3)
+with col_a:
+    st.metric("إجمالي المبيعات", f"{total_sales} ج.م")
+with col_b:
+    st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
+with col_c:
+    st.metric("مبيعات الفيزا", f"{visa_sales} ج.m")
 
 st.write("---")
 st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
@@ -273,13 +273,13 @@ if "invoices" in st.session_state and st.session_state.invoices:
 else:
     st.info("لا توجد فواتير مسجلة اليوم.")
 
-# --- إصلاح وإظهار نصوص القائمة الجانبية (Sidebar) ---
 st.sidebar.markdown("""
     <style>
-        [data-testid="stSidebar"] {
-            color: #ffffff; /* جعل الخط باللون الأبيض ليظهر بوضوح */
+        [data-testid="stSidebar"] * {
+            color: white !important;
         }
     </style>
 """, unsafe_allow_html=True)
+
 
 
