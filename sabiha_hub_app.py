@@ -10,23 +10,23 @@ st.set_page_config(page_title="Sabiha Hub", layout="wide", initial_sidebar_state
 # ============================================================================
 # 1. إدارة تهيئة البيانات وحفظها تلقائياً لضمان عدم الضياع على السيرفر الأونلاين
 # ============================================================================
+# تهيئة مستودع الحسابات في دالة مستقلة لضمان بقائها حتى عند إضافة حسابات جديدة حياً
+if "credentials" not in st.session_state:
+    st.session_state.credentials = {
+        "owner": {"username": "owner", "password": "sabiha2026"},
+        "workers_accounts": {
+            "worker1": {
+                "name": "كاشير الاستقبال", 
+                "password": "pos123", 
+                "role": "worker",
+                "permissions": ["🛒 كاشير الاستقبال POS", "📑... دفتر المصروفات"]
+            }
+        }
+    }
+
 if "initialized" not in st.session_state:
     st.session_state.initialized = True
     
-    # الحسابات الافتراضية الافتتاحية للمنظومة مع تحديد الصلاحيات الافتراضية
-    if "credentials" not in st.session_state:
-        st.session_state.credentials = {
-            "owner": {"username": "owner", "password": "sabiha2026"},
-            "workers_accounts": {
-                "worker1": {
-                    "name": "كاشير الاستقبال", 
-                    "password": "pos123", 
-                    "role": "worker",
-                    "permissions": ["🛒 كاشير الاستقبال POS", "📑... دفتر المصروفات"]
-                }
-            }
-        }
-        
     # قائمة الفنيين الافتتاحية
     if "workers" not in st.session_state:
         st.session_state.workers = [
@@ -67,7 +67,7 @@ if "initialized" not in st.session_state:
     if "monthly_archive" not in st.session_state:
         st.session_state.monthly_archive = {}
 
-# التأكد من وجود مفتاح الصلاحيات لجميع الحسابات القديمة تفادياً لأي أخطاء
+# التأكد من وجود مفتاح الصلاحيات لجميع الحسابات القديمة والجديدة تفادياً لأي أخطاء
 for w_user, w_data in st.session_state.credentials["workers_accounts"].items():
     if "permissions" not in w_data:
         st.session_state.credentials["workers_accounts"][w_user]["permissions"] = ["🛒 كاشير الاستقبال POS", "📑... دفتر المصروفات"]
@@ -399,7 +399,7 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
         st.info("ℹ️ لا توجد فواتير أو عمليات مسجلة لليوم حتى الآن.")
 
 # ----------------------------------------------------------------------------
-# قسم كاشير الاستقبال (POS) - نظام مبيعات مغلق السعر للكاشير (التغيير فقط من إعدادات الباقات)
+# قسم كاشير الاستقبال (POS) - نظام مبيعات مغلق السعر للكاشير
 # ----------------------------------------------------------------------------
 elif menu == "كاشير الاستقبال POS":
     st.markdown("<h2 style='text-align: center;'>📥 كاشير الاستقبال وتسجيل الفواتير</h2>", unsafe_allow_html=True)
@@ -454,7 +454,7 @@ elif menu == "كاشير الاستقبال POS":
             
         payment_method = st.radio("💵 وسيلة السداد:", options=["كاش", "فيزا"], horizontal=True)
         
-        # قفل خانة القيمة الأساسية وجعلها مخصصة للقراءة فقط ومنع الكاشير من تعديلها نهائياً (disabled=True) لضمان تحكم المالك فقط من الإعدادات
+        # قفل خانة القيمة الأساسية وجعلها مخصصة للقراءة فقط ومنع الكاشير من تعديلها نهائياً (disabled=True)
         custom_price = st.number_input("💰 القيمة الأساسية المعتمدة للمعاملة (ج.م):", min_value=0.0, value=base_price, disabled=True, help="لا يمكن تعديل السعر من واجهة الكاشير، التغيير يتم فقط من لوحة الإدارة")
         
         # خانة الخصم الخاصة بالعملاء
@@ -549,7 +549,7 @@ elif menu == "كاشير الاستقبال POS":
         st.info("ℹ️ لا توجد فواتير صادرة لليوم حتى الآن بمستندات الكاشير.")
 
 # ----------------------------------------------------------------------------
-# تقرير الحسابات والأرشيف المالي الشامل - ميزة تحميل وطباعة كشوف الأرشيف PDF
+# تقرير الحسابات والأرشيف المالي الشامل
 # ----------------------------------------------------------------------------
 elif menu == "تقرير الحسابات والأرشيف":
     st.markdown("## 📉 تقرير الحسابات والأرشيف المالي الشامل")
@@ -760,7 +760,7 @@ elif menu == "إعدادات الباقات والعمال":
                 st.error("❌ يرجى كتابة اسم باقة أو خدمة صحيح.")
                 
         st.write("---")
-        st.subheader("✏️ ثانياً: تعديل أسعار وعمولة الباقات والخدمات المسجلة حالياً (هنا يتم التغيير المعتمد للمالك)")
+        st.subheader("✏️ ثانياً: تعديل أسعار وعمولة الباقات والخدمات مسجلة حالياً")
         edit_service_dropdown = ["اختر خدمة لتعديل أسعارها فوراً"] + list(st.session_state.services.keys())
         selected_edit_s = st.selectbox("🎯 اختر الخدمة المراد تعديل قيمها حالياً لتنعكس في الكاشير:", options=edit_service_dropdown, key="dropdown_edit_services_pos")
         
