@@ -223,8 +223,8 @@ if menu == "📊 الأداء المالي والتشغيلي لليوم" and st
     worker_commissions = sum(inv["amount"] * 0.10 for inv in active_inv if inv.get("has_commission", True))
     net_profit = total_sales - tax_amount - worker_commissions
     
-    col_cards, _ = st.columns()
-    with col_cards:
+    col_cards = st.columns()
+    with col_cards[0]:
         st.markdown(f'<div class="finance-card"><div class="card-title">💵 مبيعات كاش اليوم</div><div class="card-value-green">{cash_sales} ج.م</div></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="finance-card"><div class="card-title">💳 مبيعات فيزا اليوم</div><div class="card-value-green">{visa_sales} ج.م</div></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="finance-card"><div class="card-title">📜 ضريبة اليوم 14%</div><div class="card-value-green">{tax_amount:.2f} ج.م</div></div>', unsafe_allow_html=True)
