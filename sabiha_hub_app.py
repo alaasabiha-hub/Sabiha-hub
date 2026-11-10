@@ -648,14 +648,14 @@ if menu == "دفتر المصروفات 💸":
     st.error(f"💸 إجمالي الاستهلاك والمصروفات: {total_exp} ج.م")
 
 # ============================================================================
-# قسم إعدادات الباقات والعمال (نسخة آمنة ومقاومة للأخطاء على السيرفر الأونلاين)
+# قسم إعدادات الباقات والعمال (نسخة آمنة تماماً ومقاومة لتضارب أنواع البيانات)
 # ============================================================================
 elif menu == "إعدادات الباقات والعمال":
     st.markdown("## ⚙️ لوحة الإدارة وتحديث الباقات والسرية")
     st.write("---")
     
-    # التأكد من تهيئة متغير العمال في الذاكرة لتجنب الأخطاء
-    if "workers" not in st.session_state:
+    # التأكد من تهيئة متغير العمال في الذاكرة بشكل سليم وقاطع
+    if "workers" not in st.session_state or not isinstance(st.session_state.workers, list):
         st.session_state.workers = []
     
     # واجهة إدارة الفنيين والعمال
@@ -666,7 +666,14 @@ elif menu == "إعدادات الباقات والعمال":
         new_worker_name = st.text_input("➕ اسم الفني الجديد:")
         if st.button("تثبيت فني جديد 🚀"):
             if new_worker_name.strip() != "":
-                if not any(w["name"] == new_worker_name.strip() for w in st.session_state.workers):
+                # حماية الفحص لضمان التعامل مع القواميس داخل القائمة
+                worker_exists = False
+                for w in st.session_state.workers:
+                    if isinstance(w, dict) and w.get("name") == new_worker_name.strip():
+                        worker_exists = True
+                        break
+                
+                if not worker_exists:
                     st.session_state.workers.append({"name": new_worker_name.strip(), "advance": 0.0})
                     st.success(f"✅ تم تسجيل الفني [{new_worker_name}] بنجاح في المنظومة!")
                     st.rerun()
@@ -676,10 +683,13 @@ elif menu == "إعدادات الباقات والعمال":
                 st.error("❌ يرجى إدخال اسم صحيح!")
                 
     with col_w2:
-        # بناء خيارات القائمة بشكل آمن لتفادي خطأ TypeError
+        # بناء خيارات القائمة بشكل حذر جداً لتفادي خطأ TypeError تماماً
         worker_options = ["Choose an option"]
-        if st.session_state.workers:
-            worker_options += [w["name"] for w in st.session_state.workers]
+        for w in st.session_state.workers:
+            if isinstance(w, dict) and "name" in w:
+                worker_options.append(w["name"])
+            elif isinstance(w, str):
+                worker_options.append(w)
             
         worker_to_delete = st.selectbox(
             "❌ حذف عامل نهائياً:",
@@ -688,7 +698,10 @@ elif menu == "إعدادات الباقات والعمال":
         )
         if st.button("حذف الفني 🗑️"):
             if worker_to_delete != "Choose an option":
-                st.session_state.workers = [w for w in st.session_state.workers if w["name"] != worker_to_delete]
+                st.session_state.workers = [
+                    w for w in st.session_state.workers 
+                    if (isinstance(w, dict) and w.get("name") != worker_to_delete) or (isinstance(w, str) and w != worker_to_delete)
+                ]
                 st.success(f"🗑️ تم حذف الفني [{worker_to_delete}] وإزالته من الحسابات الحالية.")
                 st.rerun()
             else:
