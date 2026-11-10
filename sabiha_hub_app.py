@@ -275,7 +275,7 @@ for inv in st.session_state.invoices:
 c1, c2, c3, c4 = st.columns(4)
 with c1: st.write(f"#{inv['id']} - {inv['customer']}")
 with c2: st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
-with c3:
+with c3
 if inv["status"] == "نشطة": st.write("🟢 نشطة")
 else: st.markdown('ملغاة ❌', unsafe_allow_html=True)
 with c4:
