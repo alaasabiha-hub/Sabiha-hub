@@ -1,5 +1,25 @@
 import streamlit as st
 import pandas as pd
+from io import BytesIO
+
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    ARABIC_SHAPING_AVAILABLE = True
+except ImportError:
+    ARABIC_SHAPING_AVAILABLE = False
 import json
 import os
 import datetime as dt
@@ -110,8 +130,6 @@ st.markdown("""
 }
 /* Keep text readable inside dark/black cards and custom dark surfaces. */
 [data-testid="stSidebar"] *,
-[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
-[data-testid="stAlert"] [data-testid="stMarkdownContainer"] *,
 [style*="background: rgb(0"],
 [style*="background-color: rgb(0"],
 [style*="background:#000"],
@@ -251,6 +269,20 @@ st.markdown("""
     opacity: 1 !important;
 }
 
+/* Strong contrast for dark/black custom panels and Streamlit status boxes. */
+[style*="background: #000"], [style*="background:#000"],
+[style*="background-color: #000"], [style*="background-color:#000"],
+[style*="background: rgb(0, 0, 0)"], [style*="background-color: rgb(0, 0, 0)"],
+[style*="#212529"], [style*="#343a40"], [style*="#202124"],
+[style*="rgb(33, 37, 41)"], [style*="rgb(52, 58, 64)"],
+[style*="#212529"] *, [style*="#343a40"] *, [style*="#202124"] *,
+[style*="rgb(33, 37, 41)"] *, [style*="rgb(52, 58, 64)"] *,
+[style*="background: #000"] *, [style*="background:#000"] *,
+[style*="background-color: #000"] *, [style*="background-color:#000"] *,
+[style*="background: rgb(0, 0, 0)"] *, [style*="background-color: rgb(0, 0, 0)"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -505,6 +537,109 @@ def printable_html(title, body):
     </style></head><body><h1>{safe_title}</h1>{body}</body></html>"""
 
 
+def _pdf_text(value):
+    """Prepare readable RTL text when Arabic shaping dependencies are installed."""
+    value = str(value if value is not None else "")
+    if ARABIC_SHAPING_AVAILABLE:
+        try:
+            return get_display(arabic_reshaper.reshape(value))
+        except Exception:
+            return value
+    return value
+
+
+def build_pdf(title, lines, table_data=None):
+    """Build an A4 PDF in memory; Arabic shaping is enabled when its extras exist."""
+    if not REPORTLAB_AVAILABLE:
+        return None
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=32, leftMargin=32,
+        topMargin=36, bottomMargin=36,
+        title=str(title), author="Sabiha Hub",
+    )
+    styles = getSampleStyleSheet()
+    font_name = "Helvetica"
+    font_paths = [
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf",
+    ]
+    for font_path in font_paths:
+        if os.path.exists(font_path):
+            try:
+                if "SabihaArabic" not in pdfmetrics.getRegisteredFontNames():
+                    pdfmetrics.registerFont(TTFont("SabihaArabic", font_path))
+                font_name = "SabihaArabic"
+                break
+            except Exception:
+                pass
+    title_style = ParagraphStyle(
+        "SabihaTitle", parent=styles["Title"], fontName=font_name,
+        fontSize=17, leading=23, alignment=TA_CENTER, textColor=colors.HexColor("#173b63"),
+    )
+    body_style = ParagraphStyle(
+        "SabihaBody", parent=styles["BodyText"], fontName=font_name,
+        fontSize=9, leading=15, alignment=TA_RIGHT, textColor=colors.HexColor("#17324d"),
+    )
+    story = [Paragraph(html.escape(_pdf_text(title)), title_style), Spacer(1, 14)]
+    for line in lines or []:
+        story.append(Paragraph(html.escape(_pdf_text(line)), body_style))
+        story.append(Spacer(1, 4))
+    if table_data:
+        header_style = ParagraphStyle(
+            "SabihaTableHeader", parent=body_style, textColor=colors.white,
+            fontName=font_name, fontSize=8, leading=11,
+        )
+        shaped_rows = []
+        for row_index, row in enumerate(table_data):
+            cell_style = header_style if row_index == 0 else body_style
+            shaped_rows.append([Paragraph(html.escape(_pdf_text(cell)), cell_style) for cell in row])
+        table = Table(shaped_rows, repeatRows=1, hAlign="RIGHT")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#173b63")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.extend([Spacer(1, 10), table])
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def invoice_pdf(inv):
+    workers_text = "، ".join(invoice_workers(inv)) or "مبيعات مباشرة"
+    lines = [
+        f"رقم الفاتورة: {inv.get('id', '')}",
+        f"التاريخ: {inv.get('time', '')}",
+        f"رقم اللوحة: {inv.get('plate_number', '---')}",
+        f"الخدمة / المنتج: {inv.get('service', '')}",
+        f"فئة السيارة: {inv.get('car_type', '---')}",
+        f"الفنيون: {workers_text}",
+        f"الخصم: {float(inv.get('discount', 0)):.2f} ج.م",
+        f"الإجمالي الصافي: {float(inv.get('total', 0)):.2f} ج.م",
+        f"العمولة الإجمالية: {float(inv.get('commission_total', 0)):.2f} ج.م",
+        f"طريقة الدفع: {inv.get('payment', 'كاش')}",
+        f"الحالة: {'مرتجع' if inv.get('status') == 'Refunded' else 'نشطة'}",
+    ]
+    return build_pdf("فاتورة Sabiha Hub", lines)
+
+
+def report_pdf(title, invoices, summary_lines=None):
+    df = invoice_dataframe(invoices)
+    columns = ["رقم الفاتورة", "التاريخ", "رقم اللوحة", "البيان", "الإجمالي", "الحالة"]
+    rows = [columns]
+    if not df.empty:
+        for _, row in df.iterrows():
+            rows.append([str(row.get(c, "")) for c in columns])
+    return build_pdf(title, summary_lines or [], rows if len(rows) > 1 else None)
+
+
 def invoice_dataframe(invoices):
     rows = []
     for inv in invoices:
@@ -542,6 +677,17 @@ def show_invoice_card(inv, prefix, index, allow_refund=True):
             f"الفنيون: {', '.join(invoice_workers(inv)) or 'مبيعات مباشرة'} · "
             f"العمولة الإجمالية: {float(inv.get('commission_total', 0)):.2f} ج.م"
         )
+        pdf_data = invoice_pdf(inv)
+        if pdf_data:
+            st.download_button(
+                "📄 تحميل الفاتورة PDF",
+                data=pdf_data,
+                file_name=f"{inv.get('id', 'invoice')}.pdf",
+                mime="application/pdf",
+                key=f"{prefix}_pdf_{inv.get('id', '')}_{index}",
+            )
+        else:
+            st.warning("تحميل PDF يحتاج إضافة reportlab إلى requirements.txt.")
         if status == "Refunded":
             st.error(
                 f"مرتجع بواسطة: {inv.get('cancelled_by', '---')} | "
@@ -642,6 +788,25 @@ def render_dashboard():
             f"<p>الصافي التقديري: {current_net:.2f} ج.م</p></div>"
             + df.to_html(index=False, border=0)
         )
+        daily_pdf = report_pdf(
+            "التقرير اليومي - Sabiha Hub", current_invoices,
+            [
+                f"تاريخ التقرير: {dt.date.today()}",
+                f"المبيعات: {current_sales:.2f} ج.م",
+                f"المصروفات: {current_expenses:.2f} ج.م",
+                f"الضريبة التقديرية: {current_vat:.2f} ج.م",
+                f"العمولات: {current_commissions:.2f} ج.م",
+                f"الصافي التقديري: {current_net:.2f} ج.م",
+            ],
+        )
+        if daily_pdf:
+            st.download_button(
+                "📄 تحميل تقرير اليوم PDF",
+                data=daily_pdf,
+                file_name=f"sabiha_daily_report_{dt.date.today()}.pdf",
+                mime="application/pdf",
+                key="download_daily_report_pdf",
+            )
         st.download_button(
             "تحميل تقرير اليوم HTML (قابل للطباعة PDF)",
             printable_html("التقرير اليومي - Sabiha Hub", report_body).encode("utf-8"),
@@ -855,6 +1020,24 @@ elif page == "archive":
             file_name="sabiha_archive.csv",
             mime="text/csv",
         )
+        archive_pdf_data = build_pdf(
+            "أرشيف Sabiha Hub",
+            [f"عدد الأيام المسجلة: {len(archive_rows)}"],
+            [["اليوم", "المبيعات", "المصروفات", "الضريبة", "العمولات", "الصافي"]]
+            + [[
+                str(row["اليوم"]), f"{float(row['المبيعات']):.2f}",
+                f"{float(row['المصروفات']):.2f}", f"{float(row['الضريبة']):.2f}",
+                f"{float(row['العمولات']):.2f}", f"{float(row['الصافي']):.2f}",
+            ] for row in archive_rows],
+        )
+        if archive_pdf_data:
+            st.download_button(
+                "📄 تحميل تقرير الأرشيف PDF",
+                data=archive_pdf_data,
+                file_name="sabiha_archive_report.pdf",
+                mime="application/pdf",
+                key="download_archive_report_pdf",
+            )
     else:
         st.caption("لا توجد سجلات يومية قابلة للتنزيل حالياً.")
 
@@ -1061,6 +1244,17 @@ elif page == "settings":
             "اسم مستخدم المالك",
             value=st.session_state.credentials["owner"].get("username", "owner"),
         )
+        show_owner_password = st.checkbox("إظهار كلمة المرور الحالية للمالك", key="show_owner_password")
+        if show_owner_password:
+            st.text_input(
+                "كلمة المرور الحالية للمالك",
+                value=st.session_state.credentials["owner"].get("password", ""),
+                type="default",
+                disabled=True,
+                key="owner_current_password_view",
+            )
+        else:
+            st.caption("كلمة المرور الحالية مخفية لحماية الحساب. فعّل خيار الإظهار عند الحاجة.")
         owner_password = st.text_input(
             "كلمة مرور جديدة (اتركها فارغة دون تغيير)",
             type="password",
@@ -1078,7 +1272,20 @@ elif page == "settings":
         accounts = st.session_state.credentials.setdefault("workers_accounts", {})
         for uid, account in list(accounts.items()):
             with st.expander(f"{account.get('name', uid)} ({uid})"):
-                st.caption("كلمة المرور مخفية. لا تشارك بيانات الدخول مع أي شخص غير مصرح له.")
+                show_worker_password = st.checkbox(
+                    "إظهار كلمة المرور الحالية",
+                    key=f"show_acc_password_{uid}",
+                )
+                if show_worker_password:
+                    st.text_input(
+                        "كلمة المرور الحالية",
+                        value=account.get("password", ""),
+                        type="default",
+                        disabled=True,
+                        key=f"acc_current_password_view_{uid}",
+                    )
+                else:
+                    st.caption("كلمة المرور الحالية مخفية. فعّل خيار الإظهار عند الحاجة.")
                 display_name = st.text_input(
                     "اسم الموظف",
                     value=account.get("name", uid),
