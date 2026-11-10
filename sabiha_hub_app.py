@@ -528,14 +528,10 @@ for w in st.session_state.workers:
         st.metric("السحوبات والسلفيات الحالية", f"{w['advance']} ج.م")
     with col_m3:
         st.metric("الصافي المستحق للدفع", f"{net_worker_pay} ج.م")
-
-# =========================================================================
-# شاشة كشف حساب العمولات والسلفيات الحية
-# =========================================================================
-elif menu == "كشف العمولات والسلفيات الحية":
-    st.markdown("## 👥 إدارة عمولات العمال والسلفيات الحية")
     st.write("---")
-    
+    st.markdown("### 👥 إدارة عمولات العمال والسلفيات الحية")
+    st.write("---")
+
     if st.session_state.workers:
         for worker in st.session_state.workers:
             w_name = worker["name"]
