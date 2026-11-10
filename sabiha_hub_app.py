@@ -224,13 +224,14 @@ if st.session_state.user_role == "owner":
         
         # تحويل الاختيار الحركي إلى مسمى نصي ثابت ومضمون 100% لتفادي مشاكل الحروف
         if "الأداء" in raw_menu:
-            menu = "dashboard"
+            menu = "لوحة الداشبورد الرئيسية"
         elif "كاشير" in raw_menu:
-            menu = "pos"
+            menu = "POS كاشير الاستقبال والخدمات"
         elif "الأرشيف" in raw_menu:
-            menu = "archive"
+            menu = "تقرير الحسابات الشهرية"
         elif "إعدادات" in raw_menu:
-            menu = "settings"
+            menu = "إعدادات الباقات والعمال"
+
 
 
 else:
