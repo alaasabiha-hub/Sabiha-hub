@@ -447,22 +447,26 @@ st.rerun()
 
 =========================================================================
 
-3️⃣ تقرير الحسابات المبيعات الشهرية المعزولة 📅
+# =========================================================================
+# تقرير الحسابات المبيعات الشهرية المعزولة
+# =========================================================================
 
-=========================================================================
 elif menu == "تقرير الحسابات الشهرية":
-st.markdown("## 📅 لوحة تقرير المبيعات والحسابات الشهرية المعزولة")
-st.write("---")
-# اختيار الشهر المراد فحص سجلاته البرمجية دون خلط الحسابات المالية نهائياً
-available_months = list(st.session_state.monthly_archive.keys())
-if not available_months:
-available_months = [current_month_str]
-target_month = st.selectbox("اختر الشهر المحاسبي لعرض أرشيفه المنفصل:", available_months)
-month_data = st.session_state.monthly_archive.get(target_month, [])
-if month_data:
-m_sales = sum(inv["amount"] for inv in month_data if inv.get("status") == "نشطة")
-m_cancel = sum(inv.get("amount_before_cancel", 0) for inv in month_data if inv.get("status") == "ملغاة")
-st.info(f"📊 ملخص شهر {target_month}: إجمالي المبيعات المستلمة: {m_sales} ج.م | إجمالي العمليات الملغاة المؤرشفة: {m_cancel} ج.م")
+    st.markdown("## 📊 لوحة تقرير المبيعات والحسابات الشهرية المعزولة")
+    st.write("---")
+    
+    # اختيار الشهر المراد فحص سجلاته البرمجية دون خلط الحسابات المالية نهائياً
+    available_months = list(st.session_state.monthly_archive.keys())
+    if not available_months:
+        available_months = [current_month_str]
+    target_month = st.selectbox("📅 اختر الشهر المحاسبي لعرض أرشيفه المنفصل:", available_months)
+    month_data = st.session_state.monthly_archive.get(target_month, [])
+    
+    if month_data:
+        m_sales = sum(inv["amount"] for inv in month_data if inv.get("status") == "نشطة")
+        m_cancel = sum(inv.get("amount_before_cancel", 0) for inv in month_data if inv.get("status") == "ملغاة")
+        st.info(f"📊 ملخص شهر {target_month}: إجمالي المبيعات النشطة ({m_sales}) ج.م | إجمالي العمليات الملغاة المؤرشفة ({m_cancel}) ج.م")
+
 # عرض فواتير الشهر المستهدف برمجياً بشكل منسق بجدول البيانات
 for inv in month_data:
 st.write(f"📄 فاتورة #{inv['id']} | لوحة: {inv['car_plate']} | الخدمة: {inv['service']} | القيمة: {inv['amount']} ج.م | الحالة: {inv['status']}")
