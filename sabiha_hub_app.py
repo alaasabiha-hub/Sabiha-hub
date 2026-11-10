@@ -554,7 +554,7 @@ for w in st.session_state.workers:
 if menu == "دفتر المصروفات اليومية":
     st.markdown("## 💸 إدارة دفتر المصروفات اليومية والتشغيلية")
     st.write("---")
-
+    with st.form("expenses_form"):  
         
         save_exp = st.form_submit_button("حفظ وتحديث دفتر المصروفات 💾")
         if save_exp:
