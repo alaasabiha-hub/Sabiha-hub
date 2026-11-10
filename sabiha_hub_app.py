@@ -119,7 +119,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ============================================================================
-# 3. شريط التنقل الجانبي (Sidebar) وتطهير خيارات النصوص والروابط حياً بناءً على الصلاحيات الديناميكية
+# 3. شريط التنقل الجانبي (Sidebar) وتطهير خيارات الصلاحيات ديناميكياً
 # ============================================================================
 st.sidebar.markdown(f"### 🚪 مرحباً: **{st.session_state.current_user}**")
 st.sidebar.markdown(f"💼 صلاحية الحساب: `{st.session_state.user_role}`")
@@ -148,7 +148,6 @@ all_possible_pages = [
 if st.session_state.user_role == "owner":
     menu_options = all_possible_pages
 else:
-    # جلب الصلاحيات المخصصة لهذا العامل المحددة بواسطة المالك
     current_uid = st.session_state.current_user_id
     user_account_data = st.session_state.credentials["workers_accounts"].get(current_uid, {})
     menu_options = user_account_data.get("permissions", ["🛒 كاشير الاستقبال POS"])
@@ -223,6 +222,11 @@ for worker_name, inv_list in st.session_state.session_state_invoices.items():
             unique_inv = inv.copy()
             all_invoices.append(unique_inv)
 
+# قائمة الفنيين العامة لاستخدامها في منسدلات الكنسلة والبيع
+worker_list = [w["name"] for w in st.session_state.workers if isinstance(w, dict) and "name" in w]
+if not worker_list:
+    worker_list = ["لا يوجد فني مسؤول"]
+
 if menu == "📊 لوحة الداشبورد الرئيسية":
     st.markdown("## 📊 لوحة الأداء المالي والتشغيلي لليوم الحالي (مزامنة حية 🟢)")
     st.write("---")
@@ -267,7 +271,7 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
     
     invoices_html_rows = ""
     for inv in all_invoices:
-        status_text = "نشطة" if inv.get("status", "Active") == "Active" else f"مرتجع (السبب: {inv.get('refund_reason', 'غير محدد')})"
+        status_text = "نشطة" if inv.get("status", "Active") == "Active" else f"مرتجع (بواسطة: {inv.get('cancelled_by','---')} | السبب: {inv.get('refund_reason', 'غير محدد')})"
         item_type = "منتج" if inv.get("sale_type") == "product" else "خدمة"
         invoices_html_rows += f"""
         <tr>
@@ -363,8 +367,8 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
                 st.write(f"🧾 رقم: **{inv['id']}** | النوع: `{type_badge}` | اللوحة: `({inv.get('plate_number', '---')})`")
             with col_i2: 
                 st.write(f"🛍️ البيان: *{inv['service']}* | الخصم: `{inv.get('discount', 0.0):.2f} ج.م`")
-                if inv.get("status") == "Refunded" and "refund_reason" in inv:
-                    st.markdown(f"<span style='color:red; font-size:12px;'>💬 سبب الإلغاء: {inv['refund_reason']}</span>", unsafe_allow_html=True)
+                if inv.get("status") == "Refunded":
+                    st.markdown(f"<span style='color:red; font-size:12px;'>💬 الملغي بواسطة: {inv.get('cancelled_by','---')} | السبب: {inv.get('refund_reason','---')}</span>", unsafe_allow_html=True)
             with col_i3: st.write(f"💵 القيمة النهائية: `{inv['total']:.2f} ج.م` | العمولة: `{inv.get('commission_total', 0.0):.2f} ج.م`")
             with col_i4: 
                 if inv.get("status", "Active") == "Active":
@@ -373,25 +377,29 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
                     st.markdown("<span style='color:red;'>↩️ **تم الاسترجاع (Refunded)**</span>", unsafe_allow_html=True)
             with col_refund:
                 if inv.get("status", "Active") == "Active":
-                    refund_reason_input = st.text_input("سبب الإلغاء 📝", key=f"reason_input_{inv['id']}_{index}", placeholder="اكتب سبب التراجع أولاً...")
-                    if st.button("إرجاع الفاتورة ↩️", key=f"ref_btn_{inv['id']}_{index}"):
+                    refund_reason_input = st.text_input("سبب الإلغاء 📝", key=f"dash_reason_{inv['id']}_{index}", placeholder="اكتب سبب التراجع أولاً...")
+                    cancelled_by_worker = st.selectbox("الفني المسؤول عن الكنسلة 👨‍🔧", options=["اختر الفني"] + worker_list, key=f"dash_cancel_worker_{inv['id']}_{index}")
+                    if st.button("إرجاع الفاتورة ↩️", key=f"dash_ref_btn_{inv['id']}_{index}"):
                         if refund_reason_input.strip() == "":
                             st.error("❌ خطأ: يجب كتابة سبب الإلغاء لإتمام العملية!")
+                        elif cancelled_by_worker == "اختر الفني":
+                            st.error("❌ خطأ: يجب اختيار الفني القائم بالكنسلة!")
                         else:
                             for w_key, w_invs in st.session_state.session_state_invoices.items():
                                 for item in w_invs:
                                     if item["id"] == inv["id"]:
                                         item["status"] = "Refunded"
                                         item["refund_reason"] = refund_reason_input.strip()
+                                        item["cancelled_by"] = cancelled_by_worker
                             st.error(f"↩️ تم تسجيل مرتجع للفاتورة [{inv['id']}] وحفظ السبب بنجاح.")
                             st.rerun()
                 else:
-                    st.button("تم ردها مسبقاً 🔒", disabled=True, key=f"ref_dis_{inv['id']}_{index}")
+                    st.button("تم ردها مسبقاً 🔒", disabled=True, key=f"dash_ref_dis_{inv['id']}_{index}")
     else:
         st.info("ℹ️ لا توجد فواتير أو عمليات مسجلة لليوم حتى الآن.")
 
 # ----------------------------------------------------------------------------
-# قسم كاشير الاستقبال (POS) - نظام المبيعات المنفصل للخدمات والمنتجات مع خانة الخصم والإيصال
+# قسم كاشير الاستقبال (POS) - نظام مبيعات مغلق السعر للكاشير (التغيير فقط من إعدادات الباقات)
 # ----------------------------------------------------------------------------
 elif menu == "كاشير الاستقبال POS":
     st.markdown("<h2 style='text-align: center;'>📥 كاشير الاستقبال وتسجيل الفواتير</h2>", unsafe_allow_html=True)
@@ -409,14 +417,10 @@ elif menu == "كاشير الاستقبال POS":
         selected_item_name = ""
         is_product = False
 
-        worker_list = [w["name"] for w in st.session_state.workers if isinstance(w, dict) and "name" in w]
-        if not worker_list:
-            worker_list = ["لا يوجد فني مسؤول"]
-
         if sale_type_selection == "بيع خدمة مركز 🛠️":
             plate_number = st.text_input("🔢 رقم لوحة السيارة:", key="pos_plate_number_input").strip()
-            car_type = st.selectbox("🚗 فئة حجم السيارة للتسعير الآلي:", options=["ملاكي / سيدان", "SUV"])
-            car_key = "الملكي" if car_type == "ملاكي / سيدan" else "SUV"
+            car_type = st.selectbox("🚗 فئة حجم السيارة للتسعير الآلي المعتمد أولياً:", options=["ملاكي / سيدان", "SUV"])
+            car_key = "الملكي" if car_type == "ملاكي / سيدان" else "SUV"
             
             service_options = list(st.session_state.services.keys())
             if not service_options:
@@ -450,8 +454,11 @@ elif menu == "كاشير الاستقبال POS":
             
         payment_method = st.radio("💵 وسيلة السداد:", options=["كاش", "فيزا"], horizontal=True)
         
-        custom_price = st.number_input("💰 القيمة الأساسية قبل الخصم (ج.م):", min_value=0.0, value=base_price)
-        customer_discount = st.number_input("📉 إدخال خصم إضافي للعميل (ج.م):", min_value=0.0, value=0.0, key="pos_discount_input")
+        # قفل خانة القيمة الأساسية وجعلها مخصصة للقراءة فقط ومنع الكاشير من تعديلها نهائياً (disabled=True) لضمان تحكم المالك فقط من الإعدادات
+        custom_price = st.number_input("💰 القيمة الأساسية المعتمدة للمعاملة (ج.م):", min_value=0.0, value=base_price, disabled=True, help="لا يمكن تعديل السعر من واجهة الكاشير، التغيير يتم فقط من لوحة الإدارة")
+        
+        # خانة الخصم الخاصة بالعملاء
+        customer_discount = st.number_input("📉 إدخال خصم إضافي للعميل إذا رغبت (ج.م):", min_value=0.0, value=0.0, key="pos_discount_input")
         
         final_calculated_total = custom_price - customer_discount
         if final_calculated_total < 0:
@@ -501,22 +508,43 @@ elif menu == "كاشير الاستقبال POS":
                 st.rerun()
 
     st.write("---")
-    st.subheader("📋 فواتير اليوم الحالية وطباعة إيصال العميل (PDF/Receipt)")
+    st.subheader("📋 فواتير اليوم الحالية وإدارة المرتجعات / طباعة إيصال العميل (POS Refund)")
     
     if all_invoices:
         for index, inv in enumerate(all_invoices):
-            col_pos1, col_pos2, col_pos3, col_pos_pdf = st.columns([3, 2, 2, 2.5])
+            col_pos1, col_pos2, col_pos3, col_pos_actions = st.columns([3, 2, 2, 3.5])
             with col_pos1: 
                 status_icon = "🟢" if inv.get("status", "Active") == "Active" else "↩️ مرتجع"
                 type_lbl = "📦 منتج" if inv.get("sale_type") == "product" else "🛠️ خدمة"
                 st.write(f"🧾 {status_icon} **{inv['id']}** | النوع: `{type_lbl}` | اللوحة: `({inv.get('plate_number', '---')})`")
             with col_pos2: 
-                st.write(f"🛍️ {inv['service']} | خصم الممنوح: `{inv.get('discount', 0.0):.2f} ج.م`")
-                if inv.get("status") == "Refunded" and "refund_reason" in inv:
-                    st.markdown(f"<span style='color:red; font-size:12px;'>💬 سبب الإلغاء: {inv['refund_reason']}</span>", unsafe_allow_html=True)
+                st.write(f"🛍️ {inv['service']} | خصم: `{inv.get('discount', 0.0):.2f} ج.م`")
+                if inv.get("status") == "Refunded":
+                    st.markdown(f"<span style='color:red; font-size:11px;'>💬 الملغي بواسطة: {inv.get('cancelled_by','---')} | السبب: {inv.get('refund_reason','---')}</span>", unsafe_allow_html=True)
             with col_pos3: st.write(f"💵 الصافي: `{inv['total']:.2f} ج.م` | `{inv.get('payment','كاش')}`")
-            with col_pos_pdf:
+            with col_pos_actions:
                 generate_receipt_pdf_trigger(inv, f"pos_sheet_{index}")
+                
+                if inv.get("status", "Active") == "Active":
+                    pos_reason = st.text_input("سبب الكنسلة 📝", key=f"pos_reason_inp_{inv['id']}_{index}", placeholder="اكتب سبب إلغاء الفاتورة...")
+                    pos_cancel_worker = st.selectbox("الفني القائم بالكنسلة 👨‍🔧", options=["اختر الفني"] + worker_list, key=f"pos_worker_sel_{inv['id']}_{index}")
+                    
+                    if st.button("إرجاع الفاتورة ↩️", key=f"pos_refund_btn_{inv['id']}_{index}", use_container_width=True):
+                        if pos_reason.strip() == "":
+                            st.error("❌ خطأ: يرجى كتابة سبب الإلغاء أولاً!")
+                        elif pos_cancel_worker == "اختر الفني":
+                            st.error("❌ خطأ: يرجى اختيار الفني القائم بالكنسلة لتوزيع المسؤولية!")
+                        else:
+                            for w_key, w_invs in st.session_state.session_state_invoices.items():
+                                for item in w_invs:
+                                    if item["id"] == inv["id"]:
+                                        item["status"] = "Refunded"
+                                        item["refund_reason"] = pos_reason.strip()
+                                        item["cancelled_by"] = pos_cancel_worker
+                            st.error(f"↩️ تم بنجاح إلغاء الفاتورة وتوثيق العملية بواسطة [{pos_cancel_worker}].")
+                            st.rerun()
+                else:
+                    st.button("تم رد العملية 🔒", disabled=True, key=f"pos_dis_btn_{inv['id']}_{index}")
     else:
         st.info("ℹ️ لا توجد فواتير صادرة لليوم حتى الآن بمستندات الكاشير.")
 
@@ -732,9 +760,9 @@ elif menu == "إعدادات الباقات والعمال":
                 st.error("❌ يرجى كتابة اسم باقة أو خدمة صحيح.")
                 
         st.write("---")
-        st.subheader("✏️ ثانياً: تعديل أسعار وعمولة الباقات والخدمات المسجلة حالياً")
+        st.subheader("✏️ ثانياً: تعديل أسعار وعمولة الباقات والخدمات المسجلة حالياً (هنا يتم التغيير المعتمد للمالك)")
         edit_service_dropdown = ["اختر خدمة لتعديل أسعارها فوراً"] + list(st.session_state.services.keys())
-        selected_edit_s = st.selectbox("🎯 اختر الخدمة المراد تعديل قيمها حالياً:", options=edit_service_dropdown, key="dropdown_edit_services_pos")
+        selected_edit_s = st.selectbox("🎯 اختر الخدمة المراد تعديل قيمها حالياً لتنعكس في الكاشير:", options=edit_service_dropdown, key="dropdown_edit_services_pos")
         
         if selected_edit_s != "اختر خدمة لتعديل أسعارها فوراً":
             s_current_data = st.session_state.services[selected_edit_s]
@@ -800,7 +828,7 @@ elif menu == "إعدادات الباقات والعمال":
                 st.info("ℹ️ لا توجد منتجات مسجلة حالياً.")
 
     # ------------------------------------------------------------------------
-    # واجهة التحكم المتقدمة في حسابات الموظفين وإدارة الصلاحيات (ما يُسمح برؤيته بالظبط)
+    # واجهة التحكم المتقدمة في حسابات الموظفين وإدارة الصلاحيات
     # ------------------------------------------------------------------------
     with tab_security:
         st.subheader("🔐 إدارة وتعديل حسابات الدخول والسرية للمنظومة")
@@ -827,7 +855,6 @@ elif menu == "إعدادات الباقات والعمال":
             with col_acc_details:
                 st.warning(f"👤 اسم الموظف: **{w_data['name']}** | اسم مستخدم الدخول: `{w_user}` | كلمة سر الحساب الحالية: `{w_data['password']}`")
                 
-                # جلب الصلاحيات الحالية ليعرضها المالك ويقوم بتعديلها في نفس اللحظة
                 current_perms = w_data.get("permissions", ["🛒 كاشير الاستقبال POS", "📑... دفتر المصروفات"])
                 updated_perms = st.multiselect(
                     f"⚙️ حدد الصفحات المسموح لـ [{w_data['name']}] برؤيتها بالظبط داخل شريط التنقل الجانبي:",
@@ -835,7 +862,6 @@ elif menu == "إعدادات الباقات والعمال":
                     default=current_perms,
                     key=f"live_edit_perms_{w_user}"
                 )
-                # حفظ التعديلات مباشرة في نفس اللحظة داخل الذاكرة المؤقتة التشاركية
                 st.session_state.credentials["workers_accounts"][w_user]["permissions"] = updated_perms
                 
             with col_acc_del:
@@ -854,7 +880,6 @@ elif menu == "إعدادات الباقات والعمال":
         with col_add_acc2: new_w_username = st.text_input("👤 اسم مستخدم الدخول (بالإنجليزي - مثال: kasher1):")
         with col_add_acc3: new_w_password = st.text_input("🔑 كلمة سر الدخول للموظف:", type="password")
         
-        # اختيار الصفحات الأساسية عند توليد حساب موظف جديد لأول مرة
         new_worker_initial_perms = st.multiselect(
             "📋 حدد صلاحيات رؤية الصفحات لهذا الحساب الجديد أولياً:",
             options=all_possible_pages,
