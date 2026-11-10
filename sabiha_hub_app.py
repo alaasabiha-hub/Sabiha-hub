@@ -491,7 +491,7 @@ elif menu == "تقرير الحسابات الشهرية":
 
 # عرض فواتير الشهر المستهدف برمجياً بشكل منسق بجدول البيانات
 for inv in month_data:
-st.write(f"📄 فاتورة #{inv['id']} | لوحة: {inv['car_plate']} | الخدمة: {inv['service']} | القيمة: {inv['amount']} ج.م | الحالة: {inv['status']}")
+    st.write(f"📄 فاتورة #{inv['id']} | لوحة: {inv['car_plate']} | الخدمة: {inv['service']} | القيمة: {inv['amount']} ج.م | الحالة: {inv['status']}")
 else:
 st.warning("⚠️ لا توجد فواتير أو بيانات مؤرشفة في هذا السجل المحاسبي لهذا الشهر بعد.")
 
