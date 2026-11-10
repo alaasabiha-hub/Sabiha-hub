@@ -237,13 +237,13 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     cancelled_inv = [inv for inv in st.session_state.invoices if inv["status"] == "ملغاة"]
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
-            col_a, col_b, col_c = st.columns(3)
+        col_a, col_b, col_c = st.columns(3)
         with col_a:
-            st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
+        st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
         with col_b:
-            st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
+        st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
         with col_c:
-            st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م")
+        st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م")
 
         st.write("---")
         st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
