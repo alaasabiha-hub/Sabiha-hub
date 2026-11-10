@@ -513,7 +513,7 @@ elif menu == "تقرير الحسابات الشهرية":
 
 st.subheader("📊 جدول الرواتب وعمولات مستحقات العمال الإجمالية الحالية")
 for w in st.session_state.workers:
-    net_worker_pay = w["commission_rate"] - w["advance"]
+    net_worker_pay = float(w["commission_rate"]) - float(w["advance"])
     st.write(f"### 👤 الفني: {w['name']}")
     col_m1, col_m2, col_m3 = st.columns(3)
     with col_m1:
