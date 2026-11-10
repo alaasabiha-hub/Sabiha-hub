@@ -547,19 +547,12 @@ elif menu == "العمولات والسلفيات الحية 👥":
                 st.metric("الصافي المستحق للدفع", f"{net_worker_pay} ج.م")
 
 
-    st.write("---")
-    st.markdown("### 👥 إدارة عمولات العمال والسلفيات الحية")
+st.write("---")
+
+elif menu == "دفتر المصروفات 💸":
+    st.markdown("## 💸 إدارة دفتر المصروفات اليومية والتشغيلية")
     st.write("---")
 
-    if st.session_state.workers:
-        for worker in st.session_state.workers:
-            w_name = worker["name"]
-
-            with col2:
-                st.metric("السحوبات والسلفيات الحالية", f"{worker.get('advance', 0)} ج.م")
-            with col3:
-                st.metric("الصافي المستحق للدفع", f"{net_worker_amount} ج.م")
-                
             # إمكانية تسجيل سلفة جديدة للعامل
             with st.popover(f"💵 تسجيل سلفة لـ {w_name}"):
                 advance_amount = st.number_input("مبلغ السلفة:", min_value=0.0, step=10.0, key=f"adv_in_{w_name}")
