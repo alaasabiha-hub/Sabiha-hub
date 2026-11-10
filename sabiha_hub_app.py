@@ -293,67 +293,6 @@ for inv in st.session_state.invoices:
             st.session_state.invoices.remove(inv)
             st.success("تم الحذف بنجاح!")
             st.rerun()
-if st.button("👁️ تفاصيل الإلغاء", key=f"view_{inv['id']}"):
-st.info(f"السبب: {inv.get('cancel_reason')} | بواسطة: {inv.get('cancelled_by')}")
-elif menu == "📅 الأرشيف والحسابات الشهرية" and st.session_state.user_role == "owner":
-st.title("📅 مجلد أرشيف الفواتير والحسابات الشهرية")
-if st.session_state.daily_reports:
-df_reports = pd.DataFrame(st.session_state.daily_reports)
-selected_month = st.selectbox("📊 اختر الشهر لعرض حساباته:", df_reports['month'].unique())
-month_df = df_reports[df_reports['month'] == selected_month]
-st.write(f"#### 📁 أرشيف حسابات شهر {selected_month}")
-df_display = month_df[["date", "day_name", "cash", "visa", "total", "tax", "commissions", "net_profit"]].copy()
-df_display.columns = ["التاريخ الفعلي", "اليوم", "كاش (ج.م)", "فيزا (ج.م)", "إجمالي الدخل (ج.م)", "الضريبة 14%", "عمولات العمال", "صافي الربح"]
-st.dataframe(df_display, use_container_width=True, hide_index=True)
-else:
-st.info("📂 لا توجد أيام مرحلة في الأرشيف المالي حتى الآن.")
-st.write("---")
-st.write("### 📜 سجل وأرشيف مراجعة الفواتير الكلي")
-if st.session_state.invoices:
-df_all_inv = pd.DataFrame(st.session_state.invoices)
-st.dataframe(df_all_inv[["id", "date", "car_plate", "customer", "amount", "payment_method", "status"]], use_container_width=True, hide_index=True)
-elif menu == "🛒 POS كاشير الاستقبال" or st.session_state.user_role == "worker":
-st.subheader("📥 كاشير الاستقبال وتسجيل العمليات")
-with st.form("car_form_pos"):
-cust_name = st.text_input("اسم الزبون:")
-cust_phone = st.text_input("رقم الهاتف (201xxxxxxxx):")
-car_plate = st.text_input("رقم لوحة السيارة:")
-pkg_options = [p["name"] for p in st.session_state.packages]
-selected_pkg_name = st.selectbox("اختر الباقة المعتمدة:", pkg_options)
-selected_pkg = next(p for p in st.session_state.packages if p["name"] == selected_pkg_name)
-selected_workers = st.multiselect("تحديد طاقم العمل لتقسيم العمولة بالتساوي:", st.session_state.workers, max_selections=2)
-pay_method = st.radio("طريقة دفع الفاتورة:", ["كاش", "فيزا"], horizontal=True)
-submit_invoice = st.form_submit_button("✅ طباعة وتسجيل الفاتورة الحالية")
-if submit_invoice and car_plate and selected_workers:
-new_id = max([i["id"] for i in st.session_state.invoices]) + 1 if st.session_state.invoices else 101
-new_inv = {
-"id": new_id, "date": current_date_str, "month": current_month_str,
-"customer_name": cust_name, "customer_phone": cust_phone, "car_plate": car_plate,
-"customer": selected_pkg["name"], "amount": selected_pkg["price"], "status": "نشطة",
-"has_commission": True, "assigned_workers": selected_workers, "payment_method": pay_method
-}
-st.session_state.invoices.append(new_inv)
-save_data(invoices_file, st.session_state.invoices)
-st.success(f"🎉 تم قيد الفاتورة رقم #{new_id} وحفظها سحابياً!")
-pdf_bytes = generate_receipt_pdf(new_id, current_date_str, current_day_ar, car_plate, selected_pkg["name"], selected_pkg["price"], pay_method, cust_name, cust_phone)
-st.download_button(label="📄 تحميل وطباعة إيصال الفاتورة (PDF)", data=pdf_bytes, file_name=f"Invoice_{new_id}.pdf", mime="application/pdf")
-if cust_phone:
-msg = f"مرحباً بك في Sabiha Hub 🚗\nتم تسجيل فاتورتك بنجاح رقم: #{new_id}\n🔹 إجمالي المبلغ: {selected_pkg['price']} ج.م"
-st.markdown(f'📱 إرسال الفاتورة بالواتساب', unsafe_allow_html=True)
-elif menu == "⚙️ إعدادات الباقات والعمال" and st.session_state.user_role == "owner":
-st.subheader("⚙️ إعدادات التشغيل السحابية")
-tab_p, tab_w = st.tabs(["✨ الباقات والعروض", "👥 طاقم العمال"])
-with tab_p:
-st.dataframe(pd.DataFrame(st.session_state.packages), use_container_width=True)
-p_name = st.text_input("اسم الباقة الجديدة:")
-p_price = st.number_input("سعر الباقة (ج.م):", min_value=0, step=50)
-if st.button("حفظ الباقة"):
-if p_name:
-new_id = max([p["id"] for p in st.session_state.packages]) + 1 if st.session_state.packages else 1
-st.session_state.packages.append({"id": new_id, "name": p_name, "price": p_price})
-save_data(packages_file, st.session_state.packages)
-st.success("تم الحفظ بنجاح")
-st.rerun()
 
 
 
