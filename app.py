@@ -74,7 +74,7 @@ st.markdown("""
         font-weight: bold;
     }
     </style>
-""", unsafe_allow_html=True)
+unsafe_allow_html=True)
 
 def display_centered_logo():
     st.markdown('<div class="logo-container">', unsafe_allow_html=True)
