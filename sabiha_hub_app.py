@@ -165,6 +165,92 @@ st.markdown("""
     .block-container { padding: 1rem .8rem 2rem; }
     .sh-hero { padding: 17px; }
 }
+
+/* === FINAL CONTRAST FIX: white text on every dark-blue/black surface === */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] *,
+[data-testid="stSidebar"] *::before,
+[data-testid="stSidebar"] *::after {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] *,
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] *,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] label *,
+[data-testid="stSidebar"] .stRadio,
+[data-testid="stSidebar"] .stRadio *,
+[data-testid="stSidebar"] button,
+[data-testid="stSidebar"] button *,
+[data-testid="stSidebar"] [data-baseweb="select"],
+[data-testid="stSidebar"] [data-baseweb="select"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+.sh-hero,
+.sh-hero *,
+.sh-hero *::before,
+.sh-hero *::after {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+/* Streamlit/custom HTML blue and charcoal panels, including nested text. */
+[style*="#173b63"], [style*="#173B63"],
+[style*="#123456"], [style*="#123456"],
+[style*="#102b49"], [style*="#102B49"],
+[style*="#0f172a"], [style*="#0F172A"],
+[style*="#111827"], [style*="#1f2937"],
+[style*="rgb(23, 59, 99)"], [style*="rgb(18, 52, 86)"],
+[style*="rgb(16, 43, 73)"], [style*="rgb(15, 23, 42)"],
+[style*="rgb(17, 24, 39)"], [style*="rgb(31, 41, 55)"],
+[style*="#173b63"] *, [style*="#173B63"] *,
+[style*="#123456"] *, [style*="#102b49"] *,
+[style*="#102B49"] *, [style*="#0f172a"] *,
+[style*="#0F172A"] *, [style*="#111827"] *,
+[style*="#1f2937"] *, [style*="rgb(23, 59, 99)"] *,
+[style*="rgb(18, 52, 86)"] *, [style*="rgb(16, 43, 73)"] *,
+[style*="rgb(15, 23, 42)"] *, [style*="rgb(17, 24, 39)"] *,
+[style*="rgb(31, 41, 55)"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+/* White text on dark primary buttons and their inner spans/icons. */
+.stButton > button[kind="primary"],
+.stButton > button[kind="primary"] *,
+.stDownloadButton > button[kind="primary"],
+.stDownloadButton > button[kind="primary"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+
+
+/* === Sidebar important-notices expander: dark panel + readable white text === */
+[data-testid="stSidebar"] [data-testid="stExpander"],
+[data-testid="stSidebar"] [data-testid="stExpander"] > details,
+[data-testid="stSidebar"] [data-testid="stExpander"] details,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+    background: #173b63 !important;
+    color: #ffffff !important;
+    border-color: #52708e !important;
+}
+[data-testid="stSidebar"] [data-testid="stExpander"] *,
+[data-testid="stSidebar"] [data-testid="stExpander"] *::before,
+[data-testid="stSidebar"] [data-testid="stExpander"] *::after {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stMarkdownContainer"],
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stCaptionContainer"],
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stCaptionContainer"] p {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    opacity: 1 !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
