@@ -500,18 +500,18 @@ else:
 # كشف حساب العمولات والسلفيات الحية 👥
 
 #=========================================================================
-elif menu == "العمولات والسلفيات الحية":
-st.markdown("## 👥 كشف حساب العمولات والسلفيات الحية للعمال")
-st.write("---")
-# تتيح للمالك مسح وتعديل السلفية المدفوعة للفني وتصحيح الحسابات
-worker_list = [w["name"] for w in st.session_state.workers]
-selected_worker = st.selectbox("اسم الفني لربط وإدارة السلفة الحالية:", worker_list if worker_list else ["أحمد مصطفى"])
-advance_amount = st.number_input("مبلغ السلفة للخصم أو التسوية (ج.م):", min_value=0, value=0)
-col_btn1, col_btn2 = st.columns(2)
-with col_btn1:
-if st.button("❌ تأكيد الخصم / تسجيل سلفة جديدة"):
-for w in st.session_state.workers:
-if w["name"] == selected_worker:
+    elif menu == "العمولات والسلفيات الحية":
+    st.markdown("## 👥 كشف حساب العمولات والسلفيات الحية للعمال")
+    st.write("---")
+    # تتيح للمالك مسح وتعديل السلفية المدفوعة للفني وتصحيح الحسابات
+    worker_list = [w["name"] for w in st.session_state.workers]
+    selected_worker = st.selectbox("اسم الفني لربط وإدارة السلفة الحالية:", worker_list if worker_list else ["أحمد مصطفى"])
+    advance_amount = st.number_input("مبلغ السلفة للخصم أو التسوية (ج.م):", min_value=0, value=0)
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+    if st.button("❌ تأكيد الخصم / تسجيل سلفة جديدة"):
+    for w in st.session_state.workers:
+    if w["name"] == selected_worker:
 w["advance"] += advance_amount
 st.success(f"تم إدراج سلفة بقيمة {advance_amount} ج.م للفني {selected_worker}")
 st.rerun()
