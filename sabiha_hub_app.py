@@ -5,7 +5,29 @@ import os
 import datetime
 
 # ضبط إعدادات الصفحة لتكون عريضة ومناسبة لجميع الشاشات
-st.set_page_config(page_title="Sabiha Hub", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Sabiha Hub", page_icon="✨", layout="wide", initial_sidebar_state="expanded")
+
+# واجهة موحدة أكثر احترافية ومتوافقة مع الشاشات المختلفة.
+st.markdown("""
+<style>
+:root { --sh-primary:#173b63; --sh-accent:#18a58a; --sh-bg:#f4f7fb; }
+.stApp { background:var(--sh-bg); }
+.block-container { padding-top:1.5rem; padding-bottom:2.5rem; max-width:1500px; }
+[data-testid="stSidebar"] { background:linear-gradient(180deg,#102b49 0%,#173b63 100%); }
+[data-testid="stSidebar"] * { color:#f7fbff !important; }
+[data-testid="stMetric"] { background:#ffffff; border:1px solid #e7edf4; padding:16px 18px; border-radius:16px; box-shadow:0 4px 16px rgba(20,48,78,.06); }
+[data-testid="stMetricLabel"] p { color:#52657a !important; font-weight:600; }
+[data-testid="stMetricValue"] { color:#173b63 !important; font-weight:800; }
+.stButton > button, .stDownloadButton > button { border-radius:10px; min-height:2.6rem; font-weight:650; }
+.stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] { border-radius:10px; }
+[data-testid="stExpander"] { border:1px solid #e4ebf2; border-radius:12px; background:#fff; }
+hr { border-color:#e3eaf2; }
+.sh-hero { background:linear-gradient(115deg,#123456,#1b6b78); padding:24px 28px; border-radius:18px; color:white; margin:0 0 18px 0; box-shadow:0 8px 24px rgba(18,52,86,.16); }
+.sh-hero h1 { color:white; margin:0; font-size:1.8rem; }
+.sh-hero p { color:#e1f2f4; margin:.4rem 0 0 0; }
+@media(max-width:700px){ .block-container{padding:1rem .8rem 2rem;} .sh-hero{padding:18px;} }
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================================================
 # 1. نظام الحفظ والتخزين السحابي الدائم لمنع ضياع الحسابات والبيانات أونلاين
@@ -30,6 +52,8 @@ def load_system_data():
             {"name": "أحمد مصطفى", "advance": 0.0},
             {"name": "محمد علي", "advance": 0.0}
         ],
+        # نسبة عمولة الخدمات من صافي الفاتورة بعد الخصم
+        "commission_rate": 10.0,
         "services": {
             "غسيل سريع": {"الملكي": 150.0, "SUV": 200.0, "fixed_commission": 20.0},
             "تلميع نانو سريع": {"الملكي": 300.0, "SUV": 400.0, "fixed_commission": 50.0},
@@ -65,6 +89,7 @@ def save_system_data():
     to_save = {
         "credentials": st.session_state.credentials,
         "workers": st.session_state.workers,
+        "commission_rate": st.session_state.commission_rate,
         "services": st.session_state.services,
         "products": st.session_state.products,
         "session_state_invoices": st.session_state.session_state_invoices,
@@ -84,6 +109,7 @@ if "system_loaded" not in st.session_state:
     persisted = load_system_data()
     st.session_state.credentials = persisted["credentials"]
     st.session_state.workers = persisted["workers"]
+    st.session_state.commission_rate = float(persisted.get("commission_rate", 10.0))
     st.session_state.services = persisted["services"]
     st.session_state.products = persisted["products"]
     st.session_state.session_state_invoices = persisted["session_state_invoices"]
@@ -250,8 +276,13 @@ if not worker_list:
 # ============================================================================
 
 if menu == "📊 لوحة الداشبورد الرئيسية":
-    st.markdown("## 📊 لوحة الأداء المالي والتشغيلي لليوم الحالي (مزامنة حية 🟢)")
-    st.write("---")
+    st.markdown("""
+    <section class="sh-hero">
+      <h1>✨ Sabiha Hub | لوحة التحكم</h1>
+      <p>نظرة موحّدة على الأداء المالي والتشغيلي ومتابعة حركة اليوم</p>
+    </section>
+    """, unsafe_allow_html=True)
+    st.caption(f"🟢 النظام يعمل · {datetime.datetime.now().strftime('%Y-%m-%d  %H:%M')}")
     
     calculated_sales = 0.0
     total_commissions = 0.0
@@ -304,7 +335,7 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
             <td>{inv.get('car_type', '---')}</td>
             <td>{inv['total']:.2f} ج.م</td>
             <td>{inv.get('discount', 0.0):.2f} ج.م</td>
-            <td>{inv.get('worker1','---')} & {inv.get('worker2','---')}</td>
+            <td>{', '.join(inv.get('workers', inv.get('commission_workers', [inv.get('worker1','---'), inv.get('worker2','---')])))}</td>
             <td>{status_text}</td>
         </tr>
         """
@@ -448,13 +479,20 @@ elif menu == "كاشير الاستقبال POS":
                 service_options = ["لا توجد خدمات"]
             selected_item_name = st.selectbox("🛍️ اختر الخدمة المعتمدة:", options=service_options)
             
-            selected_worker1 = st.selectbox("👨‍🔧 فني حارة الغسيل (العامل الأول):", options=worker_list, key="pos_w1")
-            selected_worker2 = st.selectbox("🧽 أخصائي الديتيلينج / التجهيز (العامل الثاني):", options=worker_list, key="pos_w2")
+            selected_workers = st.multiselect(
+                "👨‍🔧 الفنيون المشاركون في السيارة:",
+                options=worker_list,
+                default=[worker_list[0]] if worker_list else [],
+                key="pos_workers_multi",
+                help="اختر كل الفنيين المشاركين. تُحسب العمولة الإجمالية مرة واحدة ثم تُقسّم بالتساوي بينهم."
+            )
+            selected_worker1 = selected_workers[0] if selected_workers else "مبيعات مباشرة"
+            selected_worker2 = selected_workers[1] if len(selected_workers) > 1 else "لا يوجد"
             
             if selected_item_name in st.session_state.services:
                 base_price = float(st.session_state.services[selected_item_name].get(car_key, 0.0))
-                fixed_comm = float(st.session_state.services[selected_item_name].get("fixed_commission", 0.0))
-            st.markdown(f"ℹ️ **السعر التلقائي المحفوظ:** `{base_price:.2f} ج.م` | **العمولة الثابتة المقررة للخدمة:** `{fixed_comm:.2f} ج.م`")
+                fixed_comm = 0.0
+            st.markdown(f"ℹ️ **السعر التلقائي المحفوظ:** `{base_price:.2f} ج.م` | **نسبة عمولة الفنيين:** `{st.session_state.commission_rate:.2f}%` من صافي الفاتورة")
             
         else:
             is_product = True
@@ -481,7 +519,20 @@ elif menu == "كاشير الاستقبال POS":
             
         st.markdown(f"### 💵 الإجمالي الصافي المطلوب تحصيله: <span style='color:green;'>{final_calculated_total:.2f} ج.م</span>", unsafe_allow_html=True)
         
-        share_commission = fixed_comm / 2
+        # العمولة نسبة من صافي قيمة الخدمة بعد الخصم، ولا تُحتسب على المنتجات
+        commission_total = (final_calculated_total * st.session_state.commission_rate / 100.0) if not is_product else 0.0
+        assigned_workers = []
+        if not is_product:
+            # دعم عدد غير محدود من الفنيين المختارين مع منع تكرار الاسم.
+            assigned_workers = list(dict.fromkeys(
+                name for name in (selected_workers if "selected_workers" in locals() else [])
+                if name and name != "لا يوجد"
+            ))
+        elif selected_worker1 and selected_worker1 != "مبيعات مباشرة":
+            assigned_workers.append(selected_worker1)
+        commission_per_worker = commission_total / len(assigned_workers) if assigned_workers else 0.0
+        
+        st.caption(f"العمولة الإجمالية: {commission_total:.2f} | عدد الفنيين المشاركين: {len(assigned_workers)} | نصيب كل فني: {commission_per_worker:.2f}")
         
         if st.button("🟢 إتمام المعاملة وإصدار الفاتورة حياً", use_container_width=True):
             if selected_item_name in ["لا توجد خدمات", "لا توجد منتجات مضافة"] or (not is_product and plate_number == ""):
@@ -498,22 +549,21 @@ elif menu == "كاشير الاستقبال POS":
                     "sale_type": "product" if is_product else "service",
                     "worker1": selected_worker1,
                     "worker2": selected_worker2,
-                    "commission_total": fixed_comm,
-                    "commission_share": share_commission,
+                    "workers": assigned_workers,
+                    "commission_rate": float(st.session_state.commission_rate) if not is_product else 0.0,
+                    "commission_total": commission_total,
+                    "commission_share": commission_per_worker,
+                    "commission_workers": assigned_workers,
                     "payment": payment_method,
                     "status": "Active",
                     "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 
-                w1_key = selected_worker1 if selected_worker1 else "مبيعات مباشرة"
-                if w1_key not in st.session_state.session_state_invoices:
-                    st.session_state.session_state_invoices[w1_key] = []
-                st.session_state.session_state_invoices[w1_key].append(invoice_data)
-                
-                if not is_product and selected_worker2 != "لا يوجد":
-                    if selected_worker2 not in st.session_state.session_state_invoices:
-                        st.session_state.session_state_invoices[selected_worker2] = []
-                    st.session_state.session_state_invoices[selected_worker2].append(invoice_data)
+                invoice_workers = assigned_workers if assigned_workers else [selected_worker1 or "مبيعات مباشرة"]
+                for assigned_worker in invoice_workers:
+                    if assigned_worker not in st.session_state.session_state_invoices:
+                        st.session_state.session_state_invoices[assigned_worker] = []
+                    st.session_state.session_state_invoices[assigned_worker].append(invoice_data.copy())
                 
                 save_system_data()
                 st.success(f"🎉 تم إصدار الفاتورة بنجاح برقم [{invoice_id}]!")
@@ -691,12 +741,26 @@ elif menu == "إعدادات الباقات والعمال":
                     st.rerun()
 
     with tab_services:
+        st.subheader("🎯 إعدادات عمولة الفنيين")
+        st.caption("تُحسب العمولة كنسبة من صافي قيمة الخدمة بعد الخصم، ثم تُقسّم بالتساوي على الفنيين المشاركين. لا تُحتسب عمولة على بيع المنتجات.")
+        col_rate, col_rate_btn = st.columns([2, 1])
+        with col_rate:
+            new_commission_rate = st.number_input("نسبة العمولة الإجمالية للخدمات (%):", min_value=0.0, max_value=100.0, value=float(st.session_state.commission_rate), step=0.5, key="global_commission_rate_input")
+        with col_rate_btn:
+            st.write("")
+            st.write("")
+            if st.button("💾 حفظ نسبة العمولة", key="save_global_commission_rate"):
+                st.session_state.commission_rate = float(new_commission_rate)
+                save_system_data()
+                st.success("تم حفظ نسبة العمولة الجديدة")
+                st.rerun()
+        st.write("---")
         st.subheader("🛠️ إضافة باقة أو خدمة جديدة")
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+        col_s1, col_s2, col_s3 = st.columns(3)
         with col_s1: new_service_name = st.text_input("🏷️ اسم الخدمة:")
         with col_s2: price_malaki = st.number_input("🚗 سعر الملاكي:", min_value=0.0, value=150.0)
         with col_s3: price_suv = st.number_input("🚙 سعر SUV:", min_value=0.0, value=200.0)
-        with col_s4: fixed_comm_val = st.number_input("🎯 العمولة الثابتة:", min_value=0.0, value=20.0)
+        fixed_comm_val = 0.0
         if st.button("تثبيت باقة جديدة 📥"):
             if new_service_name.strip() != "":
                 st.session_state.services[new_service_name.strip()] = {"الملكي": float(price_malaki), "SUV": float(price_suv), "fixed_commission": float(fixed_comm_val)}
@@ -708,10 +772,10 @@ elif menu == "إعدادات الباقات والعمال":
         selected_edit_s = st.selectbox("🎯 اختر الخدمة للتعديل:", options=["اختر خدمة"] + list(st.session_state.services.keys()))
         if selected_edit_s != "اختر خدمة":
             s_current_data = st.session_state.services[selected_edit_s]
-            col_ed1, col_ed2, col_ed3 = st.columns(3)
+            col_ed1, col_ed2 = st.columns(2)
             with col_ed1: updated_price_malaki = st.number_input("🚗 سعر الملاكي المحدث:", min_value=0.0, value=float(s_current_data.get("الملكي", 0.0)))
             with col_ed2: updated_price_suv = st.number_input("🚙 سعر SUV المحدث:", min_value=0.0, value=float(s_current_data.get("SUV", 0.0)))
-            with col_ed3: updated_fixed_comm = st.number_input("🎯 العمولة المحدثة:", min_value=0.0, value=float(s_current_data.get("fixed_commission", 0.0)))
+            updated_fixed_comm = float(s_current_data.get("fixed_commission", 0.0))
             if st.button(f"💾 حفظ الأسعار لـ [{selected_edit_s}]"):
                 st.session_state.services[selected_edit_s] = {"الملكي": updated_price_malaki, "SUV": updated_price_suv, "fixed_commission": updated_fixed_comm}
                 save_system_data()
