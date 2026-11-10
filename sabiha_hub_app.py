@@ -37,6 +37,14 @@ if "initialized" not in st.session_state:
             "تنظيف صالون عميق": {"الملكي": 250.0, "SUV": 350.0, "fixed_commission": 40.0}
         }
         
+    # قائمة المنتجات والأسعار الافتتاحية (بيع بدون عمولة)
+    if "products" not in st.session_state:
+        st.session_state.products = {
+            "معطر سيارة فاخر": 30.0,
+            "فوطة مايكرو فايبر": 50.0,
+            "سائل ممسحة زجاج": 40.0
+        }
+        
     # أرشيف الفواتير الحية النشطة لليوم الحالي
     if "session_state_invoices" not in st.session_state:
         st.session_state.session_state_invoices = {}
@@ -144,6 +152,8 @@ elif "إعدادات" in raw_menu or "الباقات" in raw_menu:
 # دالة لتوليد كود طباعة الفاتورة الفردية للعميل كـ PDF
 def generate_receipt_pdf_trigger(inv, key_suffix):
     status_str = "نشطة" if inv.get("status", "Active") == "Active" else "مرتجع Refunded"
+    type_label = "منتج" if inv.get("sale_type") == "product" else "خدمة"
+    discount_display = f"<tr><td><b>الخصم الممنوح:</b></td><td>{inv.get('discount', 0.0):.2f} ج.م</td></tr>" if inv.get('discount', 0.0) > 0 else ""
     receipt_script = f"""
     <script>
     function printReceipt_{key_suffix}() {{
@@ -157,13 +167,15 @@ def generate_receipt_pdf_trigger(inv, key_suffix):
         win.document.write("<table>");
         win.document.write("<tr><td><b>رقم الفاتورة:</b></td><td>{inv['id']}</td></tr>");
         win.document.write("<tr><td><b>التاريخ:</b></td><td>{inv['time']}</td></tr>");
-        win.document.write("<tr><td><b>رقم اللوحة:</b></td><td>{inv['plate_number']}</td></tr>");
-        win.document.write("<tr><td><b>الخدمة:</b></td><td>{inv['service']}</td></tr>");
-        win.document.write("<tr><td><b>الفئة:</b></td><td>{inv['car_type']}</td></tr>");
+        win.document.write("<tr><td><b>نوع العملية:</b></td><td>{type_label}</td></tr>");
+        win.document.write("<tr><td><b>رقم اللوحة:</b></td><td>{inv.get('plate_number', '---')}</td></tr>");
+        win.document.write("<tr><td><b>البيان / البند:</b></td><td>{inv['service']}</td></tr>");
+        win.document.write("<tr><td><b>الفئة / الحجم:</b></td><td>{inv.get('car_type', '---')}</td></tr>");
         win.document.write("<tr><td><b>وسيلة الدفع:</b></td><td>{inv.get('payment','كاش')}</td></tr>");
+        win.document.write(`{discount_display}`);
         win.document.write("<tr><td><b>الحالة:</b></td><td>{status_str}</td></tr>");
         win.document.write("</table>");
-        win.document.write("<div class='total'><p>الإجمالي المحصل: {inv['total']:.2f} ج.م</p></div>");
+        win.document.write("<div class='total'><p>الإجمالي النهائي: {inv['total']:.2f} ج.م</p></div>");
         win.document.write("<hr style='border-top:1px dashed #000;'>");
         win.document.write("<p style='font-size:12px;'>شكراً لزيارتكم لـ Sabiha Hub 😊</p>");
         win.document.write("</div>");
@@ -197,12 +209,18 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
     calculated_sales = 0.0
     total_commissions = 0.0
     active_invoices_count = 0
+    canceled_invoices_total = 0.0  # إجمالي حساب الفواتير الملغاة
+    active_cars_count = 0          # عداد مخصص لعدد السيارات النشطة فقط
     
     for inv in all_invoices:
         if inv.get("status", "Active") == "Active":
             calculated_sales += float(inv.get("total", 0.0))
             total_commissions += float(inv.get("commission_total", 0.0))
             active_invoices_count += 1
+            if inv.get("sale_type", "service") == "service":
+                active_cars_count += 1
+        else:
+            canceled_invoices_total += float(inv.get("total", 0.0))
             
     st.session_state.daily_sales = calculated_sales
     tax_14 = st.session_state.daily_sales * 0.14
@@ -212,14 +230,16 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
                          
     net_profit = st.session_state.daily_sales - total_expenses_today - tax_14 - total_commissions
 
-    col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1: st.metric("💰 إجمالي المبيعات المحصلة", f"{st.session_state.daily_sales:.2f} ج.م", delta=f"{active_invoices_count} فاتورة نشطة")
-    with col_m2: st.metric("📉 إجمالي مصروفات اليوم (مخصومة)", f"{total_expenses_today:.2f} ج.م")
-    with col_m3: st.metric("🏛️ ضريبة القيمة المضافة 14% (مخصومة)", f"{tax_14:.2f} ج.م")
+    col_m1, col_m2, col_m3, col_cars = st.columns(4)
+    with col_m1: st.metric("💰 إجمالي المبيعات المحصلة", f"{st.session_state.daily_sales:.2f} ج.م", delta=f"{active_invoices_count} فاتورة إجمالية")
+    with col_m2: st.metric("📉 إجمالي مصروفات اليوم", f"{total_expenses_today:.2f} ج.م")
+    with col_m3: st.metric("🏛️ ضريبة القيمة المضافة 14%", f"{tax_14:.2f} ج.م")
+    with col_cars: st.metric("🚗 عدد السيارات اليوم الحالية", f"{active_cars_count} سيارة", help="عدد فواتير الخدمات والسيارات الحية دون المنتجات")
     
-    col_m4, col_m5 = st.columns(2)
-    with col_m4: st.metric("👨‍🔧 عمولات الفنيين الحية (مخصومة)", f"{total_commissions:.2f} ج.م")
+    col_m4, col_m5, col_canceled = st.columns(3)
+    with col_m4: st.metric("👨‍🔧 عمولات الفنيين الحية", f"{total_commissions:.2f} ج.م")
     with col_m5: st.metric("🟩 صافي المبيعات / الأرباح الحالي", f"{net_profit:.2f} ج.م")
+    with col_canceled: st.metric("🚨 إجمالي الفواتير الملغاة (Refunded)", f"{canceled_invoices_total:.2f} ج.م")
     
     st.write("---")
     st.subheader("📥 تحميل وطباعة التقارير والملخصات للمالك")
@@ -227,14 +247,17 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
     invoices_html_rows = ""
     for inv in all_invoices:
         status_text = "نشطة" if inv.get("status", "Active") == "Active" else "مرتجع Refunded"
+        item_type = "منتج" if inv.get("sale_type") == "product" else "خدمة"
         invoices_html_rows += f"""
         <tr>
             <td>{inv['id']}</td>
-            <td>{inv['plate_number']}</td>
+            <td>{inv.get('plate_number', '---')}</td>
+            <td>{item_type}</td>
             <td>{inv['service']}</td>
-            <td>{inv['car_type']}</td>
+            <td>{inv.get('car_type', '---')}</td>
             <td>{inv['total']:.2f} ج.م</td>
-            <td>{inv['worker1']} & {inv['worker2']}</td>
+            <td>{inv.get('discount', 0.0):.2f} ج.م</td>
+            <td>{inv.get('worker1','---')} & {inv.get('worker2','---')}</td>
             <td>{status_text}</td>
         </tr>
         """
@@ -253,11 +276,13 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
         win.document.write("<p><b>إجمالي المبيعات:</b> {st.session_state.daily_sales:.2f} ج.م</p>");
         win.document.write("<p><b>إجمالي المصروفات:</b> {total_expenses_today:.2f} ج.م</p>");
         win.document.write("<p><b>ضريبة القيمة المضافة 14%:</b> {tax_14:.2f} ج.م</p>");
-        win.document.write("<p><b>عمولات العمال والفنيين:</b> {total_commissions:.2f} ج.m</p>");
+        win.document.write("<p><b>عمولات العمال والفنيين:</b> {total_commissions:.2f} ج.م</p>");
+        win.document.write("<p><b>عدد السيارات المخدومة:</b> {active_cars_count} سيارة</p>");
+        win.document.write("<p><b>إجمالي المبالغ الملغاة/المرتجعة:</b> {canceled_invoices_total:.2f} ج.م</p>");
         win.document.write("<p><b>صافي المبيعات والأرباح:</b> {net_profit:.2f} ج.م</p>");
         win.document.write("</div>");
         win.document.write("<h3>📋 كشف الفواتير والعمليات المُرَحَّلة:</h3>");
-        win.document.write("<table><thead><tr><th>رقم الفاتورة</th><th>رقم اللوحة</th><th>الخدمة</th><th>الفئة</th><th>المبلغ</th><th>الفنيين المشتركين</th><th>الحالة</th></tr></thead><tbody>");
+        win.document.write("<table><thead><tr><th>رقم الفاتورة</th><th>رقم اللوحة</th><th>النوع</th><th>البيان</th><th>الفئة</th><th>المبلغ</th><th>الخصم</th><th>الفنيين</th><th>الحالة</th></tr></thead><tbody>");
         win.document.write(`{invoices_html_rows}`);
         win.document.write("</tbody></table>");
         win.document.write("</body></html>");
@@ -284,6 +309,8 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
                     "expenses": total_expenses_today,
                     "tax": tax_14,
                     "commissions": total_commissions,
+                    "cars_count": active_cars_count,
+                    "canceled_total": canceled_invoices_total,
                     "net": net_profit,
                     "invoices": json.loads(json.dumps(st.session_state.session_state_invoices))
                 }
@@ -310,9 +337,11 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
     if all_invoices:
         for index, inv in enumerate(all_invoices):
             col_i1, col_i2, col_i3, col_i4, col_refund = st.columns([2, 2, 2, 2, 1.5])
-            with col_i1: st.write(f"🧾 رقم: **{inv['id']}** | اللوحة: `({inv.get('plate_number', '---')})`")
-            with col_i2: st.write(f"🛍️ خدمة: *{inv['service']}* | الفنيين: `{inv.get('worker1','---')}` & `{inv.get('worker2','---')}`")
-            with col_i3: st.write(f"💵 القيمة: `{inv['total']:.2f} ج.م` | العمولة الكلية: `{inv.get('commission_total', 0.0):.2f} ج.م`")
+            with col_i1: 
+                type_badge = "📦 منتج" if inv.get("sale_type") == "product" else "🛠️ خدمة"
+                st.write(f"🧾 رقم: **{inv['id']}** | النوع: `{type_badge}` | اللوحة: `({inv.get('plate_number', '---')})`")
+            with col_i2: st.write(f"🛍️ البيان: *{inv['service']}* | الخصم: `{inv.get('discount', 0.0):.2f} ج.م`")
+            with col_i3: st.write(f"💵 القيمة النهائية: `{inv['total']:.2f} ج.م` | العمولة: `{inv.get('commission_total', 0.0):.2f} ج.م`")
             with col_i4: 
                 if inv.get("status", "Active") == "Active":
                     st.markdown("🟢 **الفاتورة نشطة**")
@@ -333,59 +362,99 @@ if menu == "📊 لوحة الداشبورد الرئيسية":
         st.info("ℹ️ لا توجد فواتير أو عمليات مسجلة لليوم حتى الآن.")
 
 # ----------------------------------------------------------------------------
-# قسم كاشير الاستقبال (POS) - نظام كشف الفواتير للعامِل وطباعة الإيصال PDF للعميل
+# قسم كاشير الاستقبال (POS) - نظام المبيعات المنفصل للخدمات والمنتجات مع خانة الخصم والإيصال
 # ----------------------------------------------------------------------------
 elif menu == "كاشير الاستقبال POS":
     st.markdown("<h2 style='text-align: center;'>📥 كاشير الاستقبال وتسجيل الفواتير</h2>", unsafe_allow_html=True)
     st.write("---")
     
     with st.container():
-        plate_number = st.text_input("🔢 رقم لوحة السيارة:", key="pos_plate_number_input").strip()
+        # اختيار نوع البيع لفتح خيارات البيع بدون عمولة للمنتجات
+        sale_type_selection = st.radio("📦 حدد تصنيف عملية البيع الحالية:", options=["بيع خدمة مركز 🛠️", "بيع منتج / إكسسوار 📦"], horizontal=True)
         
-        car_type = st.selectbox("🚗 فئة حجم السيارة للتسعير الآلي:", options=["ملاكي / سيدان", "SUV"])
-        car_key = "الملكي" if car_type == "ملاكي / سيدان" else "SUV"
-        
-        service_options = list(st.session_state.services.keys())
-        if not service_options:
-            st.error("❌ لا توجد خدمات مسجلة في النظام.")
-            service_options = ["لا توجد خدمات"]
-        selected_service = st.selectbox("🛍️ اختر الخدمة المعتمدة:", options=service_options)
-        
+        # تهيئة قيم الحسابات الافتراضية
+        base_price = 0.0
+        fixed_comm = 0.0
+        plate_number = "---"
+        car_type = "---"
+        selected_worker1 = "مبيعات مباشرة"
+        selected_worker2 = "مبيعات مباشرة"
+        selected_item_name = ""
+        is_product = False
+
         worker_list = [w["name"] for w in st.session_state.workers if isinstance(w, dict) and "name" in w]
         if not worker_list:
             worker_list = ["لا يوجد فني مسؤول"]
+
+        if sale_type_selection == "بيع خدمة مركز 🛠️":
+            plate_number = st.text_input("🔢 رقم لوحة السيارة:", key="pos_plate_number_input").strip()
+            car_type = st.selectbox("🚗 فئة حجم السيارة للتسعير الآلي:", options=["ملاكي / سيدان", "SUV"])
+            car_key = "الملكي" if car_type == "ملاكي / سيدان" else "SUV"
             
-        selected_worker1 = st.selectbox("👨‍🔧 فني حارة الغسيل (العامل الأول):", options=worker_list, key="pos_w1")
-        selected_worker2 = st.selectbox("🧽 أخصائي الديتيلينج / التجهيز (العامل الثاني):", options=worker_list, key="pos_w2")
-        
+            service_options = list(st.session_state.services.keys())
+            if not service_options:
+                st.error("❌ لا توجد خدمات مسجلة في النظام.")
+                service_options = ["لا توجد خدمات"]
+            selected_item_name = st.selectbox("🛍️ اختر الخدمة المعتمدة:", options=service_options)
+            
+            selected_worker1 = st.selectbox("👨‍🔧 فني حارة الغسيل (العامل الأول):", options=worker_list, key="pos_w1")
+            selected_worker2 = st.selectbox("🧽 أخصائي الديتيلينج / التجهيز (العامل الثاني):", options=worker_list, key="pos_w2")
+            
+            if selected_item_name in st.session_state.services:
+                base_price = float(st.session_state.services[selected_item_name].get(car_key, 0.0))
+                fixed_comm = float(st.session_state.services[selected_item_name].get("fixed_commission", 0.0))
+            st.markdown(f"ℹ️ **السعر التلقائي المحفوظ:** `{base_price:.2f} ج.م` | **العمولة الثابتة المقررة للخدمة:** `{fixed_comm:.2f} ج.م`")
+            
+        else:
+            # مسار بيع المنتجات (بدون عمولة عمال)
+            is_product = True
+            product_options = list(st.session_state.products.keys())
+            if not product_options:
+                st.error("❌ لا توجد منتجات مسجلة في الإعدادات للبيع حالياً.")
+                product_options = ["لا توجد منتجات مضافة"]
+            selected_item_name = st.selectbox("📦 اختر المنتج المراد بيعه:", options=product_options)
+            
+            # إمكانية تحديد العامل المسؤول لتتبع من قام بالبيع فقط ولكن بدون عمولة
+            selected_worker1 = st.selectbox("👤 الموظف المسؤول عن البيع المباشر:", options=["مبيعات مباشرة"] + worker_list, key="pos_prod_w1")
+            selected_worker2 = "لا يوجد"
+            
+            if selected_item_name in st.session_state.products:
+                base_price = float(st.session_state.products[selected_item_name])
+            fixed_comm = 0.0  # بيع منتجات بدون أي عمولة نهائياً
+            st.markdown(f"ℹ️ **سعر بيع المنتج الحالي المحفوظ:** `{base_price:.2f} ج.م` | **العمولة المقررة:** `0.00 ج.م (بدون عمولة فنية)`")
+            
         payment_method = st.radio("💵 وسيلة السداد:", options=["كاش", "فيزا"], horizontal=True)
         
-        if selected_service in st.session_state.services:
-            base_price = float(st.session_state.services[selected_service].get(car_key, 0.0))
-            fixed_comm = float(st.session_state.services[selected_service].get("fixed_commission", 0.0))
-        else:
-            base_price = 0.0
-            fixed_comm = 0.0
-            
-        st.markdown(f"ℹ️ **السعر التلقائي المحفوظ:** `{base_price:.2f} ج.م` | **العمولة الثابتة المقررة للخدمة:** `{fixed_comm:.2f} ج.م`")
+        custom_price = st.number_input("💰 القيمة الأساسية قبل الخصم (ج.م):", min_value=0.0, value=base_price)
         
-        custom_price = st.number_input("💰 المبلغ المحصل الفعلي (ج.م):", min_value=0.0, value=base_price)
+        # إضافة خانة خصم في الكاشير للعملاء إذا أحببت عمل خصم
+        customer_discount = st.number_input("📉 إدخال خصم إضافي للعميل (ج.م):", min_value=0.0, value=0.0, key="pos_discount_input")
+        
+        # حساب السعر النهائي المعتمد بعد خصم القيمة
+        final_calculated_total = custom_price - customer_discount
+        if final_calculated_total < 0:
+            final_calculated_total = 0.0
+            
+        st.markdown(f"### 💵 الإجمالي الصافي المطلوب تحصيله: <span style='color:green;'>{final_calculated_total:.2f} ج.م</span>", unsafe_allow_html=True)
         
         share_commission = fixed_comm / 2
-        st.write(f"📊 نصيب كل عامل من العمولة الثابتة (توزيع متساوي): **{share_commission:.2f} ج.م**")
+        if not is_product:
+            st.write(f"📊 نصيب كل عامل من العمولة الثابتة (توزيع متساوي): **{share_commission:.2f} ج.م**")
         
         if st.button("🟢 إتمام المعاملة وإصدار الفاتورة حياً", use_container_width=True):
-            if selected_service == "لا توجد خدمات" or plate_number == "":
-                st.error("❌ خطأ: يرجى كتابة رقم اللوحة والتأكد من اختيار الخدمة بشكل صحيح.")
+            if selected_item_name in ["لا توجد خدمات", "لا توجد منتجات مضافة"] or (not is_product and plate_number == ""):
+                st.error("❌ خطأ: يرجى التحقق من استكمال البيانات الأساسية وعملية الإدخال ورقم اللوحة.")
             else:
                 invoice_id = f"INV-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
                 
                 invoice_data = {
                     "id": invoice_id,
                     "plate_number": plate_number,
-                    "service": selected_service,
+                    "service": selected_item_name,
                     "car_type": car_type,
-                    "total": custom_price,
+                    "total": final_calculated_total,
+                    "discount": customer_discount,
+                    "sale_type": "product" if is_product else "service",
                     "worker1": selected_worker1,
                     "worker2": selected_worker2,
                     "commission_total": fixed_comm,
@@ -395,15 +464,19 @@ elif menu == "كاشير الاستقبال POS":
                     "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 
-                if selected_worker1 not in st.session_state.session_state_invoices:
-                    st.session_state.session_state_invoices[selected_worker1] = []
-                st.session_state.session_state_invoices[selected_worker1].append(invoice_data)
+                # ترحيل وإضافة الفاتورة إلى كشوف حساب العمال المعنيين
+                # إذا كانت مبيعات منتجات مباشرة، تُخزن تحت بند مبيعات مباشرة لتظهر بالتقرير
+                w1_key = selected_worker1 if selected_worker1 else "مبيعات مباشرة"
+                if w1_key not in st.session_state.session_state_invoices:
+                    st.session_state.session_state_invoices[w1_key] = []
+                st.session_state.session_state_invoices[w1_key].append(invoice_data)
                 
-                if selected_worker2 not in st.session_state.session_state_invoices:
-                    st.session_state.session_state_invoices[selected_worker2] = []
-                st.session_state.session_state_invoices[selected_worker2].append(invoice_data)
+                if not is_product and selected_worker2 != "لا يوجد":
+                    if selected_worker2 not in st.session_state.session_state_invoices:
+                        st.session_state.session_state_invoices[selected_worker2] = []
+                    st.session_state.session_state_invoices[selected_worker2].append(invoice_data)
                 
-                st.success(f"🎉 تم إصدار الفاتورة [{invoice_id}] بنجاح وتوزيع العمولات الثابتة بالتساوي!")
+                st.success(f"🎉 تم إصدار الفاتورة والمستند المالي بنجاح برقم [{invoice_id}]!")
                 st.balloons()
                 st.rerun()
 
@@ -418,11 +491,11 @@ elif menu == "كاشير الاستقبال POS":
             col_pos1, col_pos2, col_pos3, col_pos_pdf = st.columns([3, 2, 2, 2.5])
             with col_pos1: 
                 status_icon = "🟢" if inv.get("status", "Active") == "Active" else "↩️ مرتجع"
-                st.write(f"🧾 {status_icon} **{inv['id']}** | اللوحة: `({inv.get('plate_number', '---')})`")
-            with col_pos2: st.write(f"🛍️ {inv['service']} ({inv['car_type']})")
-            with col_pos3: st.write(f"💵 المبلغ: `{inv['total']:.2f} ج.م` | `{inv.get('payment','كاش')}`")
+                type_lbl = "📦 منتج" if inv.get("sale_type") == "product" else "🛠️ خدمة"
+                st.write(f"🧾 {status_icon} **{inv['id']}** | النوع: `{type_lbl}` | اللوحة: `({inv.get('plate_number', '---')})`")
+            with col_pos2: st.write(f"🛍️ {inv['service']} | خصم الممنوح: `{inv.get('discount', 0.0):.2f} ج.م`")
+            with col_pos3: st.write(f"💵 الصافي: `{inv['total']:.2f} ج.م` | `{inv.get('payment','كاش')}`")
             with col_pos_pdf:
-                # استدعاء دالة الطباعة وتوليد الـ PDF فوراً من المتصفح للعميل
                 generate_receipt_pdf_trigger(inv, f"pos_sheet_{index}")
     else:
         st.info("ℹ️ لا توجد فواتير صادرة لليوم حتى الآن بمستندات الكاشير.")
@@ -442,6 +515,8 @@ elif menu == "تقرير الحسابات والأرشيف":
                     st.write(f"📉 **المصروفات مخصومة:** {day_data['expenses']:.2f} ج.م")
                     st.write(f"🏛️ **الضرائب مخصومة (14%):** {day_data['tax']:.2f} ج.م")
                     st.write(f"👨‍🔧 **إجمالي عمولات الفنيين:** {day_data['commissions']:.2f} ج.م")
+                    st.write(f"🚗 **عدد السيارات المسجلة:** {day_data.get('cars_count', 0)} سيارة")
+                    st.write(f"🚨 **إجمالي المبالغ الملغاة:** {day_data.get('canceled_total', 0.0):.2f} ج.م")
                     st.write("---")
                     st.markdown("##### 📄 كشف تفصيلي بالفواتير والعمليات المؤرشفة لهذا اليوم:")
                     st.json(day_data["invoices"])
@@ -535,7 +610,7 @@ elif menu == "إعدادات الباقات والعمال":
 
     tab_workers, tab_services, tab_security = st.tabs([
         "👨‍🔧 إدارة العمال والفنيين الحية", 
-        "🛍️ التحكم بالباقات والخدمات والأسعار", 
+        "🛍️ التحكم بالباقات والخدمات والمنتجات والأسعار", 
         "🔐 إدارة حسابات الموظفين وكلمات السر"
     ])
     
@@ -572,7 +647,7 @@ elif menu == "إعدادات الباقات والعمال":
                     st.error("❌ يرجى اختيار اسم فني صحيح من القائمة للحذف.")
 
     with tab_services:
-        st.subheader("🛍️ إضافة وتحديث الباقات والتحكم بأسعارها والعمولة الثابتة")
+        st.subheader("🛠️ أولاً: إضافة وتحديث الباقات والخدمات (مع العمولة)")
         
         col_s1, col_s2, col_s3, col_s4 = st.columns(4)
         with col_s1: new_service_name = st.text_input("🏷️ اسم الخدمة / الباقة الجديدة:", key="input_new_service_name_p")
@@ -593,23 +668,51 @@ elif menu == "إعدادات الباقات والعمال":
                 st.error("❌ يرجى كتابة اسم باقة أو خدمة صحيح.")
                 
         st.write("---")
-        st.subheader("📋 الخدمات الحالية المسجلة في نظامك وتعديلها")
+        st.subheader("📦 ثانياً: إضافة وتحديث المنتجات والتحكم بأسعارها (بيع بدون عمولة)")
         
-        if st.session_state.services:
-            for s_name, s_prices in list(st.session_state.services.items()):
-                col_info, col_edit_btn, col_del_btn = st.columns([3, 1, 1])
-                with col_info:
-                    st.markdown(f"🔹 **{s_name}** 👉 (الملاكي: `{s_prices.get('الملكي', 0):.2f} ج.م` | SUV: `{s_prices.get('SUV', 0):.2f} ج.م` | العمولة الثابتة: `{s_prices.get('fixed_commission', 0):.2f} ج.م`)")
-                with col_edit_btn:
-                    if st.button("تعديل السعر ⚙️", key=f"edit_s_{s_name}"):
-                        st.info(f"💡 لتعديل سعر أو عمولة **[{s_name}]**، اكتب الاسم بالأعلى في الخانة وضع الأسعار الجديدة والعمولة الثابتة ثم اضغط تثبيت.")
-                with col_del_btn:
-                    if st.button("حذف نهائي 🗑️", key=f"delete_s_{s_name}"):
-                        del st.session_state.services[s_name]
-                        st.success(f"🗑️ تم حذف خدمة {s_name} من الكاشير!")
-                        st.rerun()
-        else:
-            st.info("ℹ️ قائمة الخدمات فارغة حالياً.")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1: new_prod_name = st.text_input("🏷️ اسم المنتج الجديد لبيعه بالكاشير:", key="input_new_prod_name_p")
+        with col_p2: price_prod = st.number_input("💰 سعر بيع المنتج للجمهور (ج.م):", min_value=0.0, value=30.0, key="num_prod_price_p")
+        
+        if st.button("تثبيت أو تحديث سعر المنتج في قائمة الكاشير 📥", use_container_width=True):
+            if new_prod_name.strip() != "":
+                st.session_state.products[new_prod_name.strip()] = float(price_prod)
+                st.success(f"🎉 تم حفظ وتثبيت منتج [{new_prod_name.strip()}] بسعر {price_prod:.2f} ج.م بنجاح بدون عمولة!")
+                st.rerun()
+            else:
+                st.error("❌ يرجى كتابة اسم منتج صحيح.")
+                
+        st.write("---")
+        st.subheader("📋 الخدمات والمنتجات الحالية المسجلة في نظامك وتعديلها")
+        
+        col_list1, col_list2 = st.columns(2)
+        with col_list1:
+            st.markdown("##### 🛠️ باقات الخدمات الحالية:")
+            if st.session_state.services:
+                for s_name, s_prices in list(st.session_state.services.items()):
+                    col_info, col_del_btn = st.columns([4, 1])
+                    with col_info:
+                        st.markdown(f"🔹 **{s_name}** 👉 (الملاكي: `{s_prices.get('الملكي', 0):.2f}` | SUV: `{s_prices.get('SUV', 0):.2f}` | العمولة: `{s_prices.get('fixed_commission', 0):.2f}`)")
+                    with col_del_btn:
+                        if st.button("حذف 🗑️", key=f"delete_s_{s_name}"):
+                            del st.session_state.services[s_name]
+                            st.rerun()
+            else:
+                st.info("ℹ️ لا توجد خدمات مسجلة.")
+                
+        with col_list2:
+            st.markdown("##### 📦 المنتجات والإكسسوارات الحالية:")
+            if st.session_state.products:
+                for p_name, p_price in list(st.session_state.products.items()):
+                    col_p_info, col_p_del = st.columns([4, 1])
+                    with col_p_info:
+                        st.markdown(f"🔸 **{p_name}** 👉 السعر المعتمد: `{p_price:.2f} ج.م` *(بدون عمولة)*")
+                    with col_p_del:
+                        if st.button("حذف 🗑️", key=f"delete_p_{p_name}"):
+                            del st.session_state.products[p_name]
+                            st.rerun()
+            else:
+                st.info("ℹ️ لا توجد منتجات مسجلة حالياً.")
 
     with tab_security:
         st.subheader("🔐 إدارة وتعديل حسابات الدخول والسرية للمنظومة")
