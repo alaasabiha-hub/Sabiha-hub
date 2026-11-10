@@ -501,10 +501,7 @@ elif menu == "تقرير الحسابات الشهرية":
         st.write("---")
         # تتيح للمالك مسح وتعديل السلفية المدفوعة للفني وتصحيح الحسابات
         worker_list = [w["name"] for w in st.session_state.workers]
-        selected_worker = st.selectbox("👤 اسم الفني لربط وإدارة السلفة الحالية:", worker_list if worker_list else ["أحمد مصطفي"])
-        # تتيح للمالك مسح وتعديل السلفية المدفوعة للفني وتصحيح الحسابات
-        worker_list = [w["name"] for w in st.session_state.workers]
-        selected_worker = st.selectbox("👤 اسم الفني لربط وإدارة السلفة الحالية:", worker_list if worker_list else ["أحمد مصطفي"])
+        selected_worker = st.selectbox("👤 اسم الفني لربط وإدارة السلفة الحالية:", worker_list if worker_list else ["أحمد مصطفى"])
         advance_amount = st.number_input("💵 مبلغ السلفة للخصم أو التسوية (ج.م):", min_value=0, value=0)
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
@@ -512,11 +509,8 @@ elif menu == "تقرير الحسابات الشهرية":
                 for w in st.session_state.workers:
                     if w["name"] == selected_worker:
                         w["advance"] += advance_amount
+                        w["advance"] = 0
 
-w["advance"] = 0
-st.success(f"✅ تم مسح وتصفير سلفة الفني {selected_worker} بنجاح واكتملت التسوية!")
-st.rerun()
-st.write("---")
 st.subheader("📊 جدول الرواتب وعمولات مستحقات العمال الإجمالية الحالية")
 for w in st.session_state.workers:
     net_worker_pay = w["commission_rate"] - w["advance"]
