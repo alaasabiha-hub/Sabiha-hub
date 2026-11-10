@@ -212,15 +212,27 @@ if not st.session_state.logged_in:
 st.sidebar.markdown(f"👤 الحساب: **{'👑 المالك' if st.session_state.user_role == 'owner' else '🛠️ كاشير العمال'}**")
 
 if st.session_state.user_role == "owner":
-    menu = st.sidebar.radio(
-        "انتقل بين الصفحات:",
-        [
-            "📊 الأداء لليوم", 
-            "📅 الأرشيف والحسابات الشهرية", 
-            "🛒 POS كاشير الاستقبال", 
-            "⚙️ إعدادات الباقات والعمال"
-        ]
-    )
+        raw_menu = st.sidebar.radio(
+            "🗺️ الانتقال بين الصفحات:",
+            [
+                "📊 الأداء لليوم",
+                "📅 الأرشيف والحسابات الشهرية",
+                "🛒 كاشير الاستقبال POS",
+                "⚙️ إعدادات الباقات والعمال"
+            ]
+        )
+        
+        # تحويل الاختيار الحركي إلى مسمى نصي ثابت ومضمون 100% لتفادي مشاكل الحروف
+        if "الأداء" in raw_menu:
+            menu = "dashboard"
+        elif "كاشير" in raw_menu:
+            menu = "pos"
+        elif "الأرشيف" in raw_menu:
+            menu = "archive"
+        elif "إعدادات" in raw_menu:
+            menu = "settings"
+
+
 else:
     menu = st.sidebar.radio(
         "انتقل بين الصفحات:", 
@@ -236,7 +248,7 @@ if st.sidebar.button("🚪 تسجيل الخروج"):
 # ==========================================
 # 5. استعراض الحسابات والعدادات الـ 5
 # ==========================================
-if menu == "📊 الأداء لليوم" and st.session_state.user_role == "owner":
+if menu == "dashboard" and st.session_state.user_role == "owner":
     st.title("📊 الأداء المالي والتشغيلي لليوم")
     
     f_time = f"📅 اليوم: {current_day_ar} | التاريخ: {current_date_str}"
