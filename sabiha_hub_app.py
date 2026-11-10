@@ -514,15 +514,15 @@ elif menu == "تقرير الحسابات الشهرية":
         st.info(f"📊 ملخص شهر {target_month}: إجمالي المبيعات النشطة ({m_sales}) ج.م | إجمالي العمليات الملغاة المؤرشفة ({m_cancel}) ج.م")
 
         # عرض فواتير الشهر المستهدف برمجياً بشكل منسق بجدول البيانات
-if month_data:
-    for inv in month_data:
-        # عرض الفواتير المفتوحة أو المؤرشفة بشكل مصفوفة مرتبة ومنظمة داخل السيستم
-        st.write(f"🧾 **فاتورة رقم:** {inv.get('id')} | **اللوحة:** {inv.get('car_plate')} | **الخدمة:** {inv.get('service')} | **القيمة:** {inv.get('amount')} | **الحالة:** {inv.get('status')}")
-else:
-    st.warning("⚠️ لا توجد فواتير أو بيانات مؤرشفة في هذا السجل المحاسبي لهذا الشهر بعد.")
+    # عرض الفواتير المفتوحة أو المؤرشفة بشكل مصفوفة مرتبة ومنظمة داخل السيستم
+    if month_data:
+        for inv in month_data:
+            st.write(f"🧾 **فاتورة رقم:** {inv.get('id')} | **اللوحة:** {inv.get('car_plate')} | **الخدمة:** {inv.get('service')} | **القيمة:** {inv.get('amount')} | **الحالة:** {inv.get('status')}")
+    else:
+        st.warning("⚠️ لا توجد فواتير أو بيانات مؤرشفة في هذا السجل المحاسبي لهذا الشهر بعد.")
 
 # ============================================================================
-# قسم العمولات والسلفيات الحية (السطر 523 في صورتك)
+# قسم العمولات والسلفيات الحية - تم فصله برمجياً بشكل مستقل لتجنب أخطاء البنية
 # ============================================================================
 elif menu == "العمولات والسلفيات الحية":
     st.markdown("## 👥 كشف حساب العمولات والسلفيات الحية للعمال")
@@ -547,6 +547,41 @@ elif menu == "العمولات والسلفيات الحية":
     
     with col_btn1:
         if st.button("❌ تأكيد الخصم / تسجيل سلفة جديدة"):
+            for w in st.session_state.workers:
+                if w["name"] == selected_worker:
+                    w["advance"] += advance_amount
+                    st.success(f"✅ تم إضافة السلفة بنجاح للعامل: {selected_worker}")
+                    st.rerun()
+                    
+    with col_btn2:
+        if st.button("🔄 تصفير السلفية الحالية"):
+            for w in st.session_state.workers:
+                if w["name"] == selected_worker:
+                    w["advance"] = 0
+                    st.success(f"🧹 تم تصفير حساب السلفيات للعامل: {selected_worker}")
+                    st.rerun()
+
+    # --- جدول الرواتب وعمولات مستحقات العمال الإجمالية الحالية ---
+    st.write("---")
+    st.markdown("### 📋 جدول الرواتب وعمولات مستحقات العمال الحالية")
+    
+    for w in st.session_state.workers:
+        # قراءة الفواتير والعمولات الحالية المسجلة باسم كل فني
+        worker_invoices = st.session_state.get('session_state_invoices', {}).get(w["name"], [])
+        total_worker_commissions = sum(float(inv.get("commission", 0)) for inv in worker_invoices)
+        
+        # حساب صافي مستحقات العامل الفعلي بعد خصم السلف الحية من رصيده
+        net_worker_pay = total_worker_commissions - float(w.get("advance", 0))
+        
+        st.write(f"### 👤 الفني: {w['name']}")
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.metric("💰 إجمالي العمولات المكتسبة", f"{total_worker_commissions} ج.م")
+        with col_m2:
+            st.metric("📉 السلفيات والسلفيات الحالية", f"{w.get('advance', 0)} ج.م")
+        with col_m3:
+            st.metric("💵 الصافي المستحق للدفع", f"{net_worker_pay} ج.م")
+        st.write("---")
             for w in st.session_state.workers:
                 if w["name"] == selected_worker:
                     w["advance"] += advance_amount
