@@ -87,6 +87,16 @@ st.markdown(
     'Sabiha Hub</h1>', 
     unsafe_allow_html=True
 )
+# اختيار الصفحة الحالية وضمان توافق المسميات وتفعيل الأزرار
+if "menu" in st.session_state:
+    if "الأداء" in st.session_state.menu:
+        menu = "📊 الأداء المالي والتشغيلي لليوم"
+    elif "كاشير" in st.session_state.menu:
+        menu = "كاشير الاستقبال POS"
+    elif "الأرشيف" in st.session_state.menu:
+        menu = "تقرير الحسابات الشهرية"
+    elif "إعدادات" in st.session_state.menu:
+        menu = "إعدادات الباقات والعمال"
 
 # ==========================================
 # 2. محرك التخزين السحابي والـ PDF
