@@ -247,7 +247,7 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
 
     # عرض جميع العدادات الخمسة بشكل رأسي واضح
     col_c = st.columns(1)
-    with col_c[0]:
+    with col_c:
         st.markdown(f'<div class="finance-card"><div class="card-title">💰 إجمالي المبيعات والدخل اليومي</div><div class="card-value-green">{total_sales} ج.م (كاش: {cash_sales} | فيزا: {visa_sales})</div></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="finance-card"><div class="card-title">📜 الضريبة العامة (14%)</div><div class="card-value-green">{tax_amount:.2f} ج.م</div></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="finance-card"><div class="card-title">👥 إجمالي عمولات العمال اليومية</div><div class="card-value-green">{worker_commissions:.2f} ج.م</div></div>', unsafe_allow_html=True)
@@ -263,8 +263,10 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
             st.session_state.daily_reports.append({
                 "date": current_date_str, "month": current_month_str, "day_name": current_day_ar,
                 "cash": cash_sales, "visa": visa_sales, "total": total_sales, "tax": tax_amount,
-                "commissions": worker_commissions, "net_profit": net_profit, "cancelled_total": total_cancelled_sum})
-            save_data(daily_reports_file, st.session_state.daily_reports)
+                "commissions": worker_commissions, "net_profit": net_profit, "cancelled_total": total_cancelled_sum
+            })
+
+save_data(daily_reports_file, st.session_state.daily_reports)
 st.success("🎉 تم ترحيل أداء اليوم بنجاح إلى الأرشيف!")
 st.rerun()
 st.write("---")
@@ -351,3 +353,6 @@ st.session_state.packages.append({"id": new_id, "name": p_name, "price": p_price
 save_data(packages_file, st.session_state.packages)
 st.success("تم الحفظ بنجاح")
 st.rerun()
+
+
+
