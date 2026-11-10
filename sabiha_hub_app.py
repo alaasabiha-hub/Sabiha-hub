@@ -293,15 +293,17 @@ for inv in st.session_state.invoices:
             st.session_state.invoices.remove(inv)
             st.success("تم الحذف بنجاح!")
             st.rerun()
+            
+    if inv.get("status") == "نشطة":
+        with st.popover("❌ كنسلة الفاتورة"):
+            reason = st.text_input("اكتب سبب الإلغاء الفعلي:", key=f"res_{inv['id']}")
+            if st.button("تأكيد الكنسلة النهائية", key=f"btn_{inv['id']}"):
+                if reason:
+                    inv["status"] = "ملغاة"
+                    inv["cancel_reason"] = reason
+                    inv["cancelled_by"] = "المالك"
+                    inv["cancel_date"] = current_date_str
 
-st.write("---")
-st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
-for inv in st.session_state.invoices:
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.write(f"#{inv['id']} - {inv['customer']}")
-    with c2:
-        st.write(f"{inv['amount']} ج.م ({inv.get('payment_method', 'كاش')})")
     with c3:
         if inv.get('status') != 'cancelled':
             if st.button("إلغاء الفاتورة", key=f"cancel_{inv['id']}"):
