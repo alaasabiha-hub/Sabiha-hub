@@ -409,8 +409,10 @@ elif menu == "POS كاشير الاستقبال والخدمات":
         
         submit_invoice = st.form_submit_button("💾 إغلاق وتثبيت الفاتورة")
         
-        if submit_invoice:
-            # حساب سعر الخدمة بناءً على نوع المركبة المختارة
+    if submit_invoice:
+        # حساب سعر الخدمة بناءً على نوع المركبة المختارة
+        pass
+
 elif menu == "POS كاشير الاستقبال والخدمات":
     st.markdown("## 🛒 كاشير الاستقبال وتسجيل الفواتير")
     st.write("---")
@@ -421,6 +423,7 @@ elif menu == "POS كاشير الاستقبال والخدمات":
         
         service_names = [s["name"] for s in st.session_state.services]
         selected_service = st.selectbox("اختر الخدمة المطلوبة:", service_names)
+
         
         worker_names = [w["name"] for w in st.session_state.workers]
         selected_worker = st.selectbox("العامل المسؤول عن التنفيذ:", worker_names)
