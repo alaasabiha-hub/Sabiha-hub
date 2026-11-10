@@ -238,16 +238,14 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
     
     cash_sales = sum(inv["amount"] for inv in active_inv if inv.get("payment_method", "كاش") == "كاش")
         # حساب وبناء مربعات الأداء لليوم (تكملة لصفحة الأداء لليوم الحالية)
-        try:
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
-            with col_b:
-                st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
-            with col_c:
-                st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م")
-        except:
-            pass
+        # --- حساب وبناء مربعات الأداء لليوم (إزاحة 8 مسافات دقيقة للداخل) ---
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            st.metric("إجمالي مبيعات اليوم", f"{sum(inv['amount'] for inv in active_inv)} ج.م")
+        with col_b:
+            st.metric("المبيعات الكاش", f"{cash_sales} ج.م")
+        with col_c:
+            st.metric("مبيعات الفيزا", f"{sum(inv['amount'] for inv in active_inv if inv.get('payment_method') == 'فيزا')} ج.م")
 
         st.write("---")
         st.write("### 🧾 كشف فواتير اليوم (تعديل وإلغاء)")
@@ -276,7 +274,7 @@ if menu == "📊 الأداء لليوم" and st.session_state.user_role == "own
         else:
             st.info("لا توجد فواتير مسجلة اليوم.")
 
-# --- بناء بقية الصفحات لتظهر عند الضغط عليها في القائمة الجانبية (خارج شرط الأداء لليوم تبدأ من أول السطر) ---
+# --- بناء بقية الصفحات لتظهر عند الضغط عليها في القائمة الجانبية (تبدأ من أول السطر تماماً جهة اليسار) ---
 elif menu == "كاشير الاستقبال POS" and st.session_state.user_role == "owner":
     st.title("🛒 كاشير الاستقبال POS")
     st.write("---")
@@ -287,7 +285,7 @@ elif menu == "إعدادات الباقات والعمال" and st.session_state
     st.write("---")
     st.info("شاشة إدارة الخدمات والباقات والعمال المتاحة بالمغسلة.")
 
-# --- تنظيف وإصلاح ألوان الثيم والخانات والقائمة الجانبية (خارج البلوك من أول السطر تماماً لمنع الأخطاء) ---
+# --- تنظيف وإصلاح ألوان الثيم والخانات والقائمة الجانبية (تبدأ من أول السطر تماماً جهة اليسار) ---
 st.markdown("""
     <style>
         /* إجبار القائمة الجانبية على إظهار النصوص باللون الأسود الداكن بوضوح */
@@ -305,7 +303,7 @@ st.markdown("""
             background-color: #ffffff !important;
             -webkit-text-fill-color: #111111 !important;
         }
-        /* إصلاح نصوص التنبيهات والمقاييس */
+        /* إصلاح نصوص التنبيهات والمقاييس لكي تظهر بوضوح */
         .stAlert p, [data-testid="stMetricValue"] {
             color: #111111 !important;
         }
