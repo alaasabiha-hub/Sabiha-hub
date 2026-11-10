@@ -560,10 +560,6 @@ elif menu == "دفتر المصروفات اليومية":
     st.write("---")
     
     with st.form("expenses_form"):
-
-        with st.form("expenses_form"):
-
-    with st.form("expenses_form"):
         st.write("### 📝 تحديث قيم المصروفات الحالية:")
         rent = st.number_input("إيجار اليوم / المحل:", min_value=0.0, value=float(st.session_state.daily_expenses.get("rent", 0)), step=50.0)
         chemicals = st.number_input("خامات ومواد كيميائية:", min_value=0.0, value=float(st.session_state.daily_expenses.get("chemicals", 0)), step=10.0)
