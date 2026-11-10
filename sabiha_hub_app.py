@@ -506,7 +506,7 @@ elif menu == "تقرير الحسابات الشهرية":
         col_btn1, col_btn2 = st.columns(2)
 
     if w["name"] == selected_worker:
-w["advance"] += advance_amount
+    w["advance"] += advance_amount
 st.success(f"تم إدراج سلفة بقيمة {advance_amount} ج.م للفني {selected_worker}")
 st.rerun()
 with col_btn2:
