@@ -39,3 +39,7 @@ The Supabase security advisor still reports leaked-password protection as disabl
 ## Optional AI business advisor
 
 The owner-only `🧠 مساعد Sabiha الذكي` page uses the OpenAI Responses API. Add an API key under the `[openai]` section in Streamlit Cloud Secrets (see `STREAMLIT_SECRETS.example.toml`). The model defaults to `gpt-6-luna` and can be changed with the `model` setting. The assistant runs only when the owner clicks its analyze button; it does not run automatically. It receives aggregate business figures only—customer names, phone numbers, emails, and license plates are not sent. OpenAI API usage is billed separately from ChatGPT subscriptions; review current rates at https://platform.openai.com/pricing/.
+
+## First-owner bootstrap protection
+
+Because the Streamlit app may be publicly reachable, the first-owner setup form is locked unless a private bootstrap token is configured. Add `bootstrap.owner_setup_token` to Streamlit Cloud Secrets before first launch. Generate a long random value locally (for example, with Python's `secrets.token_urlsafe(32)`) and keep it private. Enter it only in the first-owner setup screen. After the owner account is created, this token is no longer requested. Never commit or send the token in chat.
