@@ -970,8 +970,12 @@ def show_invoice_card(inv, prefix, index, allow_refund=True):
             st.write(inv.get("service", ""))
             st.caption(inv.get("time", ""))
         with c3:
-            st.metric("صافي الفاتورة", f"{float(inv.get('total', 0)):.2f}")
+            st.metric("إجمالي الفاتورة", f"{float(inv.get('total', 0)):.2f}")
             st.caption("ج.م")
+            contribution_row = invoice_dataframe([inv])
+            if not contribution_row.empty:
+                contribution = float(contribution_row.iloc[0]["صافي مساهمة السيارة"])
+                st.caption(f"مساهمة بعد العمولة والضريبة: {contribution:.2f} ج.م")
         st.write(
             f"الفنيون: {', '.join(invoice_workers(inv)) or 'مبيعات مباشرة'} · "
             f"العمولة الإجمالية: {float(inv.get('commission_total', 0)):.2f} ج.م"
@@ -1190,6 +1194,10 @@ def render_dashboard():
                 st.warning("تعذر تحميل تنبيهات الطلبات حالياً.")
     st.divider()
     st.subheader("📥 تقرير اليوم")
+    st.caption(
+        "صافي مساهمة السيارة = إجمالي الفاتورة − العمولة − الضريبة التقديرية، "
+        "قبل توزيع المصروفات التشغيلية العامة."
+    )
     df = invoice_dataframe(current_invoices)
     if not df.empty:
         st.dataframe(df, use_container_width=True, hide_index=True)
