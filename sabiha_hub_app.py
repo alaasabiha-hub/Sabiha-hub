@@ -5,7 +5,7 @@ from io import BytesIO
 try:
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_RIGHT, TA_CENTER
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
@@ -29,6 +29,16 @@ import hashlib
 import hmac
 import secrets
 from copy import deepcopy
+from sabiha_storage import (
+    get_supabase_client,
+    load_business_state,
+    save_business_state,
+    append_audit_log,
+    append_business_notification,
+    StateVersionConflict,
+    sync_normalized_records,
+)
+from sabiha_ai import get_openai_config, analyze_business
 
 # =============================================================================
 # Sabiha Hub - Streamlit application
@@ -379,21 +389,16 @@ st.markdown("""
 def default_data():
     return {
         "credentials": {
-            "owner": {"username": "owner", "password": "sabiha2026"},
-            "workers_accounts": {
-                "worker1": {
-                    "name": "كاشير الاستقبال",
-                    "password": "pos123",
-                    "role": "worker",
-                    "permissions": ["🛒 كاشير الاستقبال POS", "📑 دفتر المصروفات"],
-                }
-            },
+            "owner": {"username": "", "password": ""},
+            "workers_accounts": {},
         },
         "workers": [
             {"name": "أحمد مصطفى", "advance": 0.0},
             {"name": "محمد علي", "advance": 0.0},
         ],
         "commission_rate": 10.0,
+        "vat_rate_percent": 14.0,
+        "vat_included_in_sales": False,
         "services": {
             "غسيل سريع": {"الملكي": 150.0, "SUV": 200.0, "fixed_commission": 20.0},
             "تلميع نانو سريع": {"الملكي": 300.0, "SUV": 400.0, "fixed_commission": 50.0},
@@ -405,6 +410,7 @@ def default_data():
             "سائل ممسحة زجاج": 40.0,
         },
         "session_state_invoices": {},
+        "business_orders": [],
         "daily_sales": 0.0,
         "daily_expenses": {"rent": 0.0, "operational": 0.0, "utilities": 0.0},
         "daily_archive": {},
@@ -427,23 +433,51 @@ def deep_merge(defaults, saved):
 
 def load_system_data():
     defaults = default_data()
-    if not os.path.exists(DATA_FILE):
-        return defaults
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as file:
-            saved = json.load(file)
-        data = deep_merge(defaults, saved)
-        # Normalize fields that older versions may not have contained.
-        data.setdefault("credentials", defaults["credentials"])
-        data["credentials"].setdefault("owner", defaults["credentials"]["owner"])
-        data["credentials"].setdefault("workers_accounts", {})
-        data.setdefault("workers", [])
-        data.setdefault("session_state_invoices", {})
-        data.setdefault("daily_expenses", defaults["daily_expenses"])
-        return data
-    except (OSError, json.JSONDecodeError, TypeError):
-        st.error("تعذر قراءة ملف البيانات الحالي. لم يتم استبداله حتى لا نفقد البيانات.")
-        return defaults
+    client = get_supabase_client()
+    if client is not None:
+        try:
+            saved, version = load_business_state(client)
+            st.session_state["_supabase_state_version"] = version
+            st.session_state["_storage_error"] = False
+            if saved is not None:
+                data = deep_merge(defaults, saved)
+            else:
+                # First connection: preserve an existing local JSON file if one exists.
+                if os.path.exists(DATA_FILE):
+                    with open(DATA_FILE, "r", encoding="utf-8") as file:
+                        data = deep_merge(defaults, json.load(file))
+                else:
+                    data = defaults
+        except Exception as error:
+            st.session_state["_storage_error"] = True
+            st.error(
+                "تعذر الاتصال بقاعدة البيانات المشتركة. أوقفنا الحفظ مؤقتاً "
+                "حتى لا يتم استبدال بيانات أحدث بنسخة قديمة."
+            )
+            return defaults
+    else:
+        st.session_state["_supabase_state_version"] = 0
+        st.session_state["_storage_error"] = False
+        if not os.path.exists(DATA_FILE):
+            return defaults
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as file:
+                data = deep_merge(defaults, json.load(file))
+        except (OSError, json.JSONDecodeError, TypeError):
+            st.error("تعذر قراءة ملف البيانات الحالي. لم يتم استبداله حتى لا نفقد البيانات.")
+            return defaults
+
+    # Normalize fields that older versions may not have contained.
+    data.setdefault("credentials", defaults["credentials"])
+    data["credentials"].setdefault("owner", defaults["credentials"]["owner"])
+    data["credentials"].setdefault("workers_accounts", {})
+    data.setdefault("workers", [])
+    data.setdefault("session_state_invoices", {})
+    data.setdefault("business_orders", [])
+    data.setdefault("vat_rate_percent", defaults["vat_rate_percent"])
+    data.setdefault("vat_included_in_sales", defaults["vat_included_in_sales"])
+    data.setdefault("daily_expenses", defaults["daily_expenses"])
+    return data
 
 
 def save_system_data():
@@ -451,14 +485,80 @@ def save_system_data():
         "credentials": st.session_state.credentials,
         "workers": st.session_state.workers,
         "commission_rate": st.session_state.commission_rate,
+        "vat_rate_percent": st.session_state.get("vat_rate_percent", 14.0),
+        "vat_included_in_sales": st.session_state.get("vat_included_in_sales", False),
         "services": st.session_state.services,
         "products": st.session_state.products,
         "session_state_invoices": st.session_state.session_state_invoices,
+        "business_orders": st.session_state.get("business_orders", []),
         "daily_sales": st.session_state.daily_sales,
         "daily_expenses": st.session_state.daily_expenses,
         "daily_archive": st.session_state.daily_archive,
         "monthly_archive": st.session_state.monthly_archive,
     }
+    client = get_supabase_client()
+    if client is not None:
+        if st.session_state.get("_storage_error", False):
+            st.error("الحفظ متوقف بسبب مشكلة اتصال سابقة. حدّث الصفحة قبل المحاولة.")
+            return False
+        try:
+            actor = str(st.session_state.get("current_user") or "system")
+            expected_version = int(st.session_state.get("_supabase_state_version", 0))
+            new_version = save_business_state(
+                client, payload, expected_version, actor
+            )
+            st.session_state["_supabase_state_version"] = new_version
+            try:
+                sync_normalized_records(client, payload, actor)
+            except Exception:
+                st.warning("تم حفظ البيانات الأساسية، لكن تعذّر تحديث بعض الجداول التفصيلية. سنعيد المحاولة مع الحفظ التالي.")
+            event = st.session_state.get("_pending_audit_event") or {}
+            if event.get("action") == "order_status_changed":
+                try:
+                    order_status = (event.get("details") or {}).get("to", "")
+                    append_business_notification(
+                        client,
+                        order_number=str(event.get("entity_id") or ""),
+                        message=f"تم تحديث حالة الطلب {event.get('entity_id')}: {order_status}",
+                        status=str(order_status),
+                        actor=actor,
+                    )
+                except Exception:
+                    pass
+            try:
+                append_audit_log(
+                    client,
+                    actor=actor,
+                    action=event.get("action", "save_state"),
+                    entity=event.get("entity", "business_app_state"),
+                    entity_id=event.get("entity_id", "primary"),
+                    details={
+                        "version": new_version,
+                        "invoice_count": len({
+                            str(item.get("id"))
+                            for group in (payload.get("session_state_invoices") or {}).values()
+                            for item in (group or [])
+                            if isinstance(item, dict) and item.get("id")
+                        }),
+                        "order_count": len(payload.get("business_orders") or []),
+                        **(event.get("details") or {}),
+                    },
+                )
+            except Exception:
+                pass
+            finally:
+                st.session_state.pop("_pending_audit_event", None)
+            return True
+        except Exception as error:
+            if "STATE_VERSION_CONFLICT" in str(error):
+                st.error(
+                    "فيه مستخدم تاني حفظ بيانات أحدث. لم نكتب فوقها؛ "
+                    "حدّث الصفحة وحاول مرة تانية."
+                )
+            else:
+                st.error("تعذر حفظ البيانات في Supabase. لم نستخدم نسخة محلية بديلة.")
+            return False
+
     temp_file = DATA_FILE + ".tmp"
     try:
         with open(temp_file, "w", encoding="utf-8") as file:
@@ -470,11 +570,28 @@ def save_system_data():
         return False
 
 
+# Production must use shared Supabase storage. Local JSON is allowed only
+# when explicitly enabled for isolated development/testing.
+if (
+    get_supabase_client() is None
+    and os.getenv("SABIHA_ALLOW_LOCAL_STORAGE", "").strip().lower()
+    not in {"1", "true", "yes"}
+):
+    st.error(
+        "يلزم ربط Supabase قبل تشغيل النظام. أضف رابط المشروع ومفتاح "
+        "Service Role داخل Streamlit Secrets. لا تضع المفتاح في GitHub أو داخل الكود."
+    )
+    st.stop()
+
 if "system_loaded" not in st.session_state:
     persisted = load_system_data()
     for key, value in persisted.items():
         st.session_state[key] = value
     st.session_state.system_loaded = True
+
+if st.session_state.get("_storage_error", False):
+    st.error("Sabiha Hub متوقف مؤقتاً لأن قاعدة البيانات غير متاحة. لم نسمح بالدخول إلى بيانات افتراضية أو حفظ فوق بيانات غير مؤكدة.")
+    st.stop()
 
 # Automatically migrate any legacy plaintext passwords to salted one-way hashes.
 if migrate_plaintext_passwords(st.session_state.credentials):
@@ -498,6 +615,53 @@ for key, default in {
         st.session_state[key] = default
 
 if not st.session_state.logged_in:
+    owner_setup = st.session_state.credentials.get("owner", {})
+    if not owner_setup.get("username") or not owner_setup.get("password"):
+        bootstrap_config = {}
+        try:
+            bootstrap_config = st.secrets.get("bootstrap", {})
+        except Exception:
+            pass
+        expected_setup_token = (
+            os.environ.get("SABIHA_OWNER_SETUP_TOKEN", "").strip()
+            or str(bootstrap_config.get("owner_setup_token", "")).strip()
+        )
+        st.markdown(
+            "<h1 style='text-align:center;color:#173b63'>✨ إعداد Sabiha Hub لأول مرة</h1>",
+            unsafe_allow_html=True,
+        )
+        if not expected_setup_token:
+            st.error(
+                "إعداد حساب المالك الأول مقفول للحماية. أضف bootstrap.owner_setup_token "
+                "في Streamlit Secrets ثم أعد تشغيل التطبيق."
+            )
+            st.stop()
+        st.info("أنشئ حساب المالك الأول باستخدام رمز التهيئة السري. لا تشارك الرمز مع الموظفين.")
+        setup_token = st.text_input(
+            "رمز التهيئة السري",
+            type="password",
+            key="first_owner_setup_token",
+        )
+        setup_username = st.text_input("اسم مستخدم المالك", key="first_owner_username").strip()
+        setup_password = st.text_input("كلمة مرور المالك", type="password", key="first_owner_password")
+        setup_confirm = st.text_input("تأكيد كلمة المرور", type="password", key="first_owner_confirm")
+        if st.button("إنشاء حساب المالك الآمن", type="primary", use_container_width=True):
+            if not hmac.compare_digest(setup_token, expected_setup_token):
+                st.error("رمز التهيئة السري غير صحيح.")
+            elif not setup_username or len(setup_password) < 12 or not any(c.isalpha() for c in setup_password) or not any(c.isdigit() for c in setup_password):
+                st.error("استخدم اسم مستخدم وكلمة مرور لا تقل عن 12 حرفاً وتحتوي على حروف وأرقام.")
+            elif setup_password != setup_confirm:
+                st.error("تأكيد كلمة المرور غير مطابق.")
+            else:
+                st.session_state.credentials["owner"] = {
+                    "username": setup_username,
+                    "password": hash_password(setup_password),
+                }
+                if save_system_data():
+                    st.success("تم إنشاء حساب المالك. سجّل الدخول الآن.")
+                    st.rerun()
+        st.stop()
+
     st.markdown(
         "<h1 style='text-align:center;color:#173b63'>✨ Sabiha Hub | تسجيل الدخول</h1>",
         unsafe_allow_html=True,
@@ -531,7 +695,7 @@ if not st.session_state.logged_in:
                     st.rerun()
                 else:
                     st.error("بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.")
-        st.caption("لو دي أول مرة تشغّل النظام، راجع بيانات الدخول الافتراضية في إعدادات النشر وغيّرها فورًا.")
+        st.caption("بيانات الدخول لا تُعرض داخل النظام، وكلمات المرور محفوظة بتجزئة آمنة.")
     st.stop()
 
 
@@ -540,6 +704,10 @@ if not st.session_state.logged_in:
 # =============================================================================
 st.sidebar.markdown(f"### 👋 مرحباً: {st.session_state.current_user}")
 st.sidebar.caption(f"نوع الحساب: {st.session_state.user_role}")
+if get_supabase_client() is not None:
+    st.sidebar.success("قاعدة البيانات المشتركة: Supabase")
+else:
+    st.sidebar.warning("التخزين الحالي: ملف JSON محلي")
 st.sidebar.write("---")
 
 if st.sidebar.button("تسجيل الخروج 🔓", use_container_width=True):
@@ -550,15 +718,20 @@ if st.sidebar.button("تسجيل الخروج 🔓", use_container_width=True):
     st.rerun()
 
 if st.sidebar.button("🔄 تحديث البيانات", use_container_width=True):
+    # Force a fresh read from Supabase instead of rerunning with stale session state.
+    st.session_state["system_loaded"] = False
     st.rerun()
 
 PAGES = [
     "📊 لوحة الداشبورد الرئيسية",
     "🛒 كاشير الاستقبال POS",
+    "🚗 متابعة الطلبات",
     "📉 تقرير الحسابات والأرشيف",
     "💸 العمولات والسلفيات الحية",
     "📑 دفتر المصروفات",
     "⚙️ إعدادات الباقات والعمال",
+    "🧾 سجل التدقيق",
+    "🧠 مساعد Sabiha الذكي",
 ]
 if st.session_state.user_role == "owner":
     allowed_pages = PAGES
@@ -566,7 +739,10 @@ else:
     acc = st.session_state.credentials.get("workers_accounts", {}).get(
         st.session_state.current_user_id, {}
     )
-    allowed_pages = [p for p in acc.get("permissions", []) if p in PAGES]
+    allowed_pages = [
+        p for p in acc.get("permissions", [])
+        if p in PAGES and p not in {"🧾 سجل التدقيق", "🧠 مساعد Sabiha الذكي"}
+    ]
     if not allowed_pages:
         allowed_pages = ["🛒 كاشير الاستقبال POS"]
 
@@ -574,10 +750,13 @@ selected_page = st.sidebar.radio("📍 التنقل بين الصفحات", allo
 menu_map = {
     "📊 لوحة الداشبورد الرئيسية": "dashboard",
     "🛒 كاشير الاستقبال POS": "pos",
+    "🚗 متابعة الطلبات": "orders",
     "📉 تقرير الحسابات والأرشيف": "archive",
     "💸 العمولات والسلفيات الحية": "commissions",
     "📑 دفتر المصروفات": "expenses",
     "⚙️ إعدادات الباقات والعمال": "settings",
+    "🧾 سجل التدقيق": "audit",
+    "🧠 مساعد Sabiha الذكي": "ai",
 }
 page = menu_map[selected_page]
 
@@ -616,6 +795,34 @@ def invoice_workers(invoice):
     return [name for name in names if name and name != "مبيعات مباشرة"]
 
 
+def worker_commission_invoices(worker_name):
+    """Collect a worker's invoices across the current day and all closed archives."""
+    result, seen = [], set()
+
+    def collect(invoice_buckets):
+        if not isinstance(invoice_buckets, dict):
+            return
+        for invoice_list in invoice_buckets.values():
+            for invoice in invoice_list or []:
+                if not isinstance(invoice, dict):
+                    continue
+                invoice_id = invoice.get("id")
+                if not invoice_id or invoice_id in seen:
+                    continue
+                if worker_name in invoice_workers(invoice):
+                    seen.add(invoice_id)
+                    result.append(invoice.copy())
+
+    collect(st.session_state.get("session_state_invoices", {}))
+    for record in st.session_state.get("daily_archive", {}).values():
+        collect(record.get("invoices", {}) if isinstance(record, dict) else {})
+    for month_records in st.session_state.get("monthly_archive", {}).values():
+        if isinstance(month_records, dict):
+            for record in month_records.values():
+                collect(record.get("invoices", {}) if isinstance(record, dict) else {})
+    return sorted(result, key=lambda item: item.get("time", ""))
+
+
 def printable_html(title, body):
     safe_title = html.escape(str(title))
     return f"""<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
@@ -638,13 +845,13 @@ def _pdf_text(value):
     return value
 
 
-def build_pdf(title, lines, table_data=None):
+def build_pdf(title, lines, table_data=None, landscape_page=False):
     """Build an A4 PDF with embedded Arabic font and RTL shaping when available."""
     if not REPORTLAB_AVAILABLE:
         return None
     buffer = BytesIO()
     doc = SimpleDocTemplate(
-        buffer, pagesize=A4, rightMargin=32, leftMargin=32,
+        buffer, pagesize=landscape(A4) if landscape_page else A4, rightMargin=32, leftMargin=32,
         topMargin=36, bottomMargin=36,
         title=str(title), author="Sabiha Hub",
     )
@@ -719,6 +926,8 @@ def invoice_pdf(inv):
         f"الخصم: {float(inv.get('discount', 0)):.2f} ج.م",
         f"الإجمالي الصافي: {float(inv.get('total', 0)):.2f} ج.م",
         f"العمولة الإجمالية: {float(inv.get('commission_total', 0)):.2f} ج.م",
+        f"الضريبة التقديرية: {float(invoice_dataframe([inv]).iloc[0]['ضريبة تقديرية']):.2f} ج.م",
+        f"صافي مساهمة السيارة قبل المصروفات التشغيلية: {float(invoice_dataframe([inv]).iloc[0]['صافي مساهمة السيارة']):.2f} ج.م",
         f"طريقة الدفع: {inv.get('payment', 'كاش')}",
         f"الحالة: {'مرتجع' if inv.get('status') == 'Refunded' else 'نشطة'}",
     ]
@@ -727,17 +936,34 @@ def invoice_pdf(inv):
 
 def report_pdf(title, invoices, summary_lines=None):
     df = invoice_dataframe(invoices)
-    columns = ["رقم الفاتورة", "التاريخ", "رقم اللوحة", "البيان", "الإجمالي", "الحالة"]
+    columns = [
+        "رقم الفاتورة", "التاريخ", "رقم اللوحة", "البيان",
+        "الإجمالي", "العمولة", "ضريبة تقديرية", "صافي مساهمة السيارة", "الحالة"
+    ]
     rows = [columns]
     if not df.empty:
         for _, row in df.iterrows():
             rows.append([str(row.get(c, "")) for c in columns])
-    return build_pdf(title, summary_lines or [], rows if len(rows) > 1 else None)
+    return build_pdf(
+        title, summary_lines or [], rows if len(rows) > 1 else None,
+        landscape_page=True,
+    )
 
 
 def invoice_dataframe(invoices):
     rows = []
+    vat_rate_value = float(st.session_state.get("vat_rate_percent", 14.0))
+    vat_is_included = bool(st.session_state.get("vat_included_in_sales", False))
     for inv in invoices:
+        total = float(inv.get("total", 0) or 0)
+        commission = float(inv.get("commission_total", 0) or 0)
+        tax_amount = (
+            total * vat_rate_value / (100.0 + vat_rate_value)
+            if vat_is_included and vat_rate_value >= 0
+            else total * vat_rate_value / 100.0
+        )
+        is_active = inv.get("status", "Active") == "Active"
+        contribution = max(0.0, total - commission - tax_amount) if is_active else 0.0
         rows.append({
             "رقم الفاتورة": inv.get("id", ""),
             "التاريخ": inv.get("time", ""),
@@ -745,14 +971,47 @@ def invoice_dataframe(invoices):
             "النوع": "منتج" if inv.get("sale_type") == "product" else "خدمة",
             "البيان": inv.get("service", ""),
             "الفئة": inv.get("car_type", "---"),
-            "الإجمالي": float(inv.get("total", 0)),
-            "الخصم": float(inv.get("discount", 0)),
+            "الإجمالي": total,
+            "الخصم": float(inv.get("discount", 0) or 0),
             "الفنيون": "، ".join(invoice_workers(inv)),
-            "العمولة": float(inv.get("commission_total", 0)),
-            "الحالة": "نشطة" if inv.get("status", "Active") == "Active" else "مرتجع",
+            "العمولة": commission,
+            "ضريبة تقديرية": tax_amount if is_active else 0.0,
+            "صافي مساهمة السيارة": contribution,
+            "الحالة": "نشطة" if is_active else "مرتجع",
             "الدفع": inv.get("payment", "كاش"),
         })
     return pd.DataFrame(rows)
+
+
+def excel_report_bytes(invoices, summary_rows=None, archive_rows=None):
+    """Build a multi-sheet Excel workbook in memory."""
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        invoice_dataframe(invoices).to_excel(
+            writer, index=False, sheet_name="الفواتير"
+        )
+        if summary_rows:
+            pd.DataFrame(summary_rows).to_excel(
+                writer, index=False, sheet_name="الملخص"
+            )
+        if archive_rows:
+            pd.DataFrame(archive_rows).to_excel(
+                writer, index=False, sheet_name="الأرشيف"
+            )
+    return buffer.getvalue()
+
+
+def archive_excel_bytes(daily_rows, monthly_rows):
+    """Build an Excel workbook with daily and monthly archive summaries."""
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        pd.DataFrame(daily_rows).to_excel(
+            writer, index=False, sheet_name="أرشيف الأيام"
+        )
+        pd.DataFrame(monthly_rows).to_excel(
+            writer, index=False, sheet_name="ملخص الشهور"
+        )
+    return buffer.getvalue()
 
 
 def show_invoice_card(inv, prefix, index, allow_refund=True):
@@ -766,8 +1025,12 @@ def show_invoice_card(inv, prefix, index, allow_refund=True):
             st.write(inv.get("service", ""))
             st.caption(inv.get("time", ""))
         with c3:
-            st.metric("صافي الفاتورة", f"{float(inv.get('total', 0)):.2f}")
+            st.metric("إجمالي الفاتورة", f"{float(inv.get('total', 0)):.2f}")
             st.caption("ج.م")
+            contribution_row = invoice_dataframe([inv])
+            if not contribution_row.empty:
+                contribution = float(contribution_row.iloc[0]["صافي مساهمة السيارة"])
+                st.caption(f"مساهمة بعد العمولة والضريبة: {contribution:.2f} ج.م")
         st.write(
             f"الفنيون: {', '.join(invoice_workers(inv)) or 'مبيعات مباشرة'} · "
             f"العمولة الإجمالية: {float(inv.get('commission_total', 0)):.2f} ج.م"
@@ -807,6 +1070,12 @@ def show_invoice_card(inv, prefix, index, allow_refund=True):
                             "refund_reason": reason.strip(),
                             "cancelled_by": cancelled_by,
                         })
+                        st.session_state["_pending_audit_event"] = {
+                            "action": "invoice_refunded",
+                            "entity": "business_invoices",
+                            "entity_id": inv["id"],
+                            "details": {"reason": reason.strip(), "cancelled_by": cancelled_by},
+                        }
                         save_system_data()
                         st.success("تم تسجيل الإرجاع.")
                         st.rerun()
@@ -819,20 +1088,28 @@ service_invoices = [x for x in active_invoices if x.get("sale_type", "service") 
 sales_today = sum(float(x.get("total", 0)) for x in active_invoices)
 commissions_today = sum(float(x.get("commission_total", 0)) for x in active_invoices)
 expenses_today = sum(float(v) for v in st.session_state.daily_expenses.values())
-vat_today = sales_today * 0.14
+vat_rate = float(st.session_state.get("vat_rate_percent", 14.0))
+vat_included = bool(st.session_state.get("vat_included_in_sales", False))
+vat_today = sales_today * vat_rate / (100.0 + vat_rate) if vat_included else sales_today * vat_rate / 100.0
 net_today = sales_today - expenses_today - vat_today - commissions_today
 st.session_state.daily_sales = sales_today
 
 # =============================================================================
 # Dashboard
 # =============================================================================
+@st.fragment(run_every="5s")
 def render_dashboard():
     # Read the latest shared JSON data on every dashboard refresh. This lets the
     # owner's dashboard see invoices created by another logged-in worker session.
     latest = load_system_data()
+    if st.session_state.get("_storage_error", False):
+        st.warning("تعذر تحديث البيانات من Supabase حالياً. لم نكتب فوق البيانات المحفوظة.")
+        return
     for key in (
-        "session_state_invoices", "daily_expenses", "daily_archive",
-        "monthly_archive", "workers", "commission_rate", "services", "products",
+        "credentials", "session_state_invoices", "daily_sales", "daily_expenses",
+        "daily_archive", "monthly_archive", "workers", "commission_rate",
+        "services", "products", "business_orders", "vat_rate_percent",
+        "vat_included_in_sales",
     ):
         if key in latest:
             st.session_state[key] = latest[key]
@@ -844,7 +1121,13 @@ def render_dashboard():
     current_sales = sum(float(x.get("total", 0)) for x in current_active)
     current_commissions = sum(float(x.get("commission_total", 0)) for x in current_active)
     current_expenses = sum(float(v) for v in st.session_state.daily_expenses.values())
-    current_vat = current_sales * 0.14
+    current_vat_rate = float(st.session_state.get("vat_rate_percent", 14.0))
+    current_vat_included = bool(st.session_state.get("vat_included_in_sales", False))
+    current_vat = (
+        current_sales * current_vat_rate / (100.0 + current_vat_rate)
+        if current_vat_included
+        else current_sales * current_vat_rate / 100.0
+    )
     current_net = current_sales - current_expenses - current_vat - current_commissions
     st.session_state.daily_sales = current_sales
 
@@ -857,15 +1140,119 @@ def render_dashboard():
     a, b, c, d = st.columns(4)
     a.metric("💰 المبيعات المحصلة", f"{current_sales:,.2f} ج.م", f"{len(current_active)} فاتورة")
     b.metric("📉 مصروفات اليوم", f"{current_expenses:,.2f} ج.م")
-    c.metric("🏛️ ضريبة 14% تقديرية", f"{current_vat:,.2f} ج.م")
+    c.metric(f"🏛️ ضريبة {current_vat_rate:g}% تقديرية", f"{current_vat:,.2f} ج.م")
     d.metric("🚗 سيارات مخدومة", len(current_services))
+    active_orders = [o for o in st.session_state.get("business_orders", []) if o.get("status") not in ("delivered", "cancelled")]
     e, f, g = st.columns(3)
     e.metric("👨‍🔧 عمولات الفنيين", f"{current_commissions:,.2f} ج.م")
     f.metric("🟩 صافي تقديري", f"{current_net:,.2f} ج.م")
     g.metric("↩️ إجمالي المرتجعات", f"{sum(float(x.get('total',0)) for x in current_refunded):,.2f} ج.م")
-    st.info("ملاحظة: الضريبة محسوبة هنا كتقدير 14% من المبيعات. راجع المعالجة الضريبية الفعلية مع المحاسب.")
+    st.metric("🚘 الطلبات المفتوحة", len(active_orders))
+
+    current_month_key = dt.datetime.now().strftime("%Y-%m")
+    month_sales = current_sales
+    month_daily_values = {}
+    for month_key, month_records in st.session_state.monthly_archive.items():
+        if month_key == current_month_key:
+            for day_label, record in month_records.items():
+                month_sales += float(record.get("sales", 0) or 0)
+                month_daily_values[str(day_label)[:10]] = float(record.get("sales", 0) or 0)
+    for day_label, record in st.session_state.daily_archive.items():
+        if str(day_label)[:7] == current_month_key:
+            month_sales += float(record.get("sales", 0) or 0)
+            month_daily_values[str(day_label)[:10]] = float(record.get("sales", 0) or 0)
+    today_label = dt.datetime.now().strftime("%Y-%m-%d")
+    month_daily_values[today_label] = current_sales
+    st.metric("📅 مبيعات الشهر حتى الآن", f"{month_sales:,.2f} ج.م")
+
+    st.subheader("📈 الرسوم والإحصائيات المباشرة")
+    chart_left, chart_right = st.columns(2)
+    with chart_left:
+        recent_daily = sorted(month_daily_values.items())[-7:]
+        if recent_daily:
+            daily_chart = pd.DataFrame(
+                [{"التاريخ": day, "المبيعات": amount} for day, amount in recent_daily]
+            ).set_index("التاريخ")
+            st.caption("المبيعات اليومية — آخر 7 أيام مسجلة")
+            st.line_chart(daily_chart)
+        else:
+            st.caption("لا توجد بيانات يومية كافية للرسم.")
+    with chart_right:
+        service_sales = {}
+        for invoice in current_active:
+            if invoice.get("sale_type", "service") == "service":
+                service_name = str(invoice.get("service") or "غير محدد")
+                service_sales[service_name] = service_sales.get(service_name, 0) + float(invoice.get("total", 0) or 0)
+        if service_sales:
+            service_chart = pd.DataFrame(
+                [{"الخدمة": name, "المبيعات": amount} for name, amount in service_sales.items()]
+            ).set_index("الخدمة")
+            st.caption("المبيعات حسب الخدمة")
+            st.bar_chart(service_chart)
+        else:
+            st.caption("لا توجد مبيعات خدمات لعرضها.")
+    payment_totals = {}
+    for invoice in current_active:
+        payment_name = str(invoice.get("payment") or "غير محدد")
+        payment_totals[payment_name] = payment_totals.get(payment_name, 0) + float(invoice.get("total", 0) or 0)
+    if payment_totals:
+        payment_chart = pd.DataFrame(
+            [{"وسيلة الدفع": name, "الإجمالي": amount} for name, amount in payment_totals.items()]
+        ).set_index("وسيلة الدفع")
+        st.caption("توزيع المبيعات حسب وسيلة الدفع")
+        st.bar_chart(payment_chart)
+
+    status_labels = {
+        "received": "تم الاستلام",
+        "in_progress": "جاري التنفيذ",
+        "quality_check": "مراجعة الجودة",
+        "completed": "اكتملت الخدمة",
+        "delivered": "تم التسليم",
+        "cancelled": "ملغي",
+    }
+    order_status_totals = {}
+    for order in st.session_state.get("business_orders", []):
+        label = status_labels.get(str(order.get("status") or ""), "غير محدد")
+        order_status_totals[label] = order_status_totals.get(label, 0) + 1
+    if order_status_totals:
+        st.caption("حالة السيارات والطلبات")
+        st.bar_chart(pd.DataFrame(
+            [{"الحالة": name, "عدد السيارات": count} for name, count in order_status_totals.items()]
+        ).set_index("الحالة"))
+
+    tax_mode = "مضمنة داخل إجمالي المبيعات" if current_vat_included else "تُضاف على المبيعات قبل الضريبة"
+    st.info(f"طريقة التقدير الحالية: {current_vat_rate:g}%، والضريبة {tax_mode}. راجع النسبة وطريقة التطبيق مع المحاسب وفق بلد النشاط.")
+    if st.session_state.user_role == "owner":
+        notification_client = get_supabase_client()
+        if notification_client is not None:
+            st.subheader("🔔 تنبيهات الطلبات")
+            try:
+                notification_response = (
+                    notification_client.table("business_notifications")
+                    .select("order_number,message,status,actor,created_at")
+                    .eq("is_read", False)
+                    .order("created_at", desc=True)
+                    .limit(10)
+                    .execute()
+                )
+                unread_notifications = notification_response.data or []
+                if unread_notifications:
+                    st.dataframe(pd.DataFrame(unread_notifications), use_container_width=True, hide_index=True)
+                    if st.button("تحديد التنبيهات كمقروءة", key="mark_business_notifications_read"):
+                        notification_client.table("business_notifications").update(
+                            {"is_read": True}
+                        ).eq("is_read", False).execute()
+                        st.rerun()
+                else:
+                    st.caption("لا توجد تنبيهات جديدة.")
+            except Exception:
+                st.warning("تعذر تحميل تنبيهات الطلبات حالياً.")
     st.divider()
     st.subheader("📥 تقرير اليوم")
+    st.caption(
+        "صافي مساهمة السيارة = إجمالي الفاتورة − العمولة − الضريبة التقديرية، "
+        "قبل توزيع المصروفات التشغيلية العامة."
+    )
     df = invoice_dataframe(current_invoices)
     if not df.empty:
         st.dataframe(df, use_container_width=True, hide_index=True)
@@ -874,6 +1261,23 @@ def render_dashboard():
             df.to_csv(index=False).encode("utf-8-sig"),
             file_name=f"sabiha_invoices_{dt.date.today()}.csv",
             mime="text/csv",
+        )
+        daily_excel = excel_report_bytes(
+            current_invoices,
+            summary_rows=[
+                {"المؤشر": "المبيعات", "القيمة": current_sales},
+                {"المؤشر": "المصروفات", "القيمة": current_expenses},
+                {"المؤشر": "الضريبة التقديرية", "القيمة": current_vat},
+                {"المؤشر": "العمولات", "القيمة": current_commissions},
+                {"المؤشر": "صافي الربح التقديري", "القيمة": current_net},
+            ],
+        )
+        st.download_button(
+            "📊 تحميل تقرير اليوم Excel",
+            data=daily_excel,
+            file_name=f"sabiha_daily_report_{dt.date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_daily_report_excel",
         )
         report_body = (
             f"<div class='summary'><p>المبيعات: {current_sales:.2f} ج.م</p>"
@@ -935,6 +1339,12 @@ def render_dashboard():
                     st.session_state.session_state_invoices = {}
                     st.session_state.daily_sales = 0.0
                     st.session_state.daily_expenses = {"rent": 0.0, "operational": 0.0, "utilities": 0.0}
+                    st.session_state["_pending_audit_event"] = {
+                        "action": "daily_closure_created",
+                        "entity": "business_daily_closures",
+                        "entity_id": today_key[:10],
+                        "details": {"sales": current_sales, "expenses": current_expenses, "net": current_net},
+                    }
                     save_system_data()
                     st.success("تم إغلاق اليوم وترحيله.")
                     st.rerun()
@@ -955,11 +1365,6 @@ def render_dashboard():
     st.subheader("📋 الفواتير والمرتجعات")
     for i, inv in enumerate(current_invoices):
         show_invoice_card(inv, "dash", i)
-
-# Streamlit fragments refresh the dashboard in the background without requiring
-# a manual page reload. Older Streamlit versions fall back to normal rendering.
-if hasattr(st, "fragment"):
-    render_dashboard = st.fragment(run_every="5s")(render_dashboard)
 
 if page == "dashboard":
     render_dashboard()
@@ -1033,7 +1438,7 @@ elif page == "pos":
         if invalid:
             st.error("راجع بيانات العملية قبل إصدار الفاتورة.")
         else:
-            now = dt.datetime.now()
+            now = dt.datetime.now().astimezone()
             invoice_id = f"INV-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
             assigned = selected_workers if not is_product else (
                 [product_worker] if product_worker != "مبيعات مباشرة" else []
@@ -1056,15 +1461,44 @@ elif page == "pos":
                 "payment": payment,
                 "status": "Active",
                 "time": now.strftime("%Y-%m-%d %H:%M:%S"),
+                "created_at": now.isoformat(timespec="seconds"),
             }
             # Store a copy under every participating worker; dashboard deduplicates by invoice ID.
             invoice_buckets = assigned if assigned else ["مبيعات مباشرة"]
             for worker_name in invoice_buckets:
                 st.session_state.session_state_invoices.setdefault(worker_name, []).append(inv.copy())
-            save_system_data()
-            st.success(f"تم إصدار الفاتورة بنجاح: {invoice_id}")
-            st.balloons()
-            st.rerun()
+            order_number = None
+            if not is_product:
+                order_number = f"ORD-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+                st.session_state.setdefault("business_orders", []).append({
+                    "order_number": order_number,
+                    "invoice_id": invoice_id,
+                    "plate_number": plate,
+                    "vehicle_type": car_type,
+                    "service_name": selected_item,
+                    "assigned_workers": assigned,
+                    "status": "received",
+                    "created_by": st.session_state.get("current_user") or "system",
+                    "created_at": now.isoformat(timespec="seconds"),
+                })
+            st.session_state["_pending_audit_event"] = {
+                "action": "invoice_issued",
+                "entity": "business_invoices",
+                "entity_id": invoice_id,
+                "details": {
+                    "order_number": order_number,
+                    "total": final_total,
+                    "plate_number": plate if not is_product else None,
+                    "sale_type": "product" if is_product else "service",
+                    "workers": assigned,
+                },
+            }
+            if save_system_data():
+                st.success(f"تم إصدار الفاتورة بنجاح: {invoice_id}")
+                st.balloons()
+                st.rerun()
+            else:
+                st.error("لم يتم تأكيد حفظ الفاتورة. لا تعِد إصدارها قبل تحديث الصفحة والتحقق من سجل الفواتير.")
 
     st.divider()
     st.subheader("📋 فواتير اليوم")
@@ -1073,10 +1507,128 @@ elif page == "pos":
 
 
 # =============================================================================
+# Live service orders and worker status tracking
+# =============================================================================
+elif page == "orders":
+    @st.fragment(run_every="5s")
+    def render_orders():
+        latest = load_system_data()
+        if not st.session_state.get("_storage_error", False):
+            for key in (
+                "credentials", "workers", "commission_rate", "services", "products",
+                "vat_rate_percent", "vat_included_in_sales",
+                "session_state_invoices", "business_orders", "daily_sales",
+                "daily_expenses", "daily_archive", "monthly_archive",
+            ):
+                if key in latest:
+                    st.session_state[key] = latest[key]
+
+        st.markdown("## 🚗 متابعة الطلبات وحالة السيارات")
+        all_orders = st.session_state.get("business_orders", [])
+        if st.session_state.user_role == "owner":
+            visible_orders = all_orders
+        else:
+            visible_orders = [
+                order for order in all_orders
+                if st.session_state.current_user in (order.get("assigned_workers") or [])
+            ]
+
+        status_labels = {
+            "received": "تم الاستلام",
+            "in_progress": "جاري التنفيذ",
+            "quality_check": "مراجعة الجودة",
+            "completed": "اكتملت الخدمة",
+            "delivered": "تم التسليم",
+            "cancelled": "ملغي",
+        }
+        status_values = list(status_labels)
+        st.caption("مزامنة تلقائية كل 5 ثوانٍ. المالك يرى كل الطلبات، والموظف يرى الطلبات المسندة إليه.")
+        if not visible_orders:
+            st.info("لا توجد طلبات مسندة أو مسجلة حالياً.")
+        for index, order in enumerate(reversed(visible_orders)):
+            order_number = order.get("order_number", f"order-{index}")
+            current_status = order.get("status", "received")
+            with st.expander(
+                f"{order_number} · لوحة {order.get('plate_number', '---')} · "
+                f"{status_labels.get(current_status, current_status)}",
+                expanded=current_status in ("received", "in_progress", "quality_check"),
+            ):
+                c1, c2, c3 = st.columns(3)
+                c1.write(f"**الخدمة:** {order.get('service_name', '---')}")
+                c2.write(f"**السيارة:** {order.get('vehicle_type', '---')}")
+                c3.write(f"**الفنيون:** {', '.join(order.get('assigned_workers') or []) or '---'}")
+                st.caption(f"وقت الإنشاء: {order.get('created_at', '---')}")
+                selected_status = st.selectbox(
+                    "تحديث حالة الطلب",
+                    status_values,
+                    index=status_values.index(current_status) if current_status in status_values else 0,
+                    format_func=lambda value: status_labels[value],
+                    key=f"order_status_{order_number}",
+                )
+                if st.button("حفظ حالة الطلب", key=f"save_order_{order_number}"):
+                    previous_status = order.get("status", "received")
+                    order["status"] = selected_status
+                    order["updated_at"] = dt.datetime.now().astimezone().isoformat(timespec="seconds")
+                    st.session_state["_pending_audit_event"] = {
+                        "action": "order_status_changed",
+                        "entity": "business_orders",
+                        "entity_id": order_number,
+                        "details": {"from": previous_status, "to": selected_status},
+                    }
+                    if save_system_data():
+                        st.success("تم تحديث حالة الطلب وتسجيل العملية.")
+                        st.rerun()
+
+    render_orders()
+
+
+# =============================================================================
 # Reports and archives
 # =============================================================================
 elif page == "archive":
     st.markdown("## 📉 تقرير الحسابات والأرشيف")
+    monthly_totals = {}
+    for month, records in st.session_state.monthly_archive.items():
+        totals = monthly_totals.setdefault(month, {
+            "المبيعات": 0.0, "المصروفات": 0.0, "الضريبة": 0.0,
+            "العمولات": 0.0, "عدد السيارات": 0, "الصافي": 0.0,
+        })
+        for record in records.values():
+            totals["المبيعات"] += float(record.get("sales", 0) or 0)
+            totals["المصروفات"] += float(record.get("expenses", 0) or 0)
+            totals["الضريبة"] += float(record.get("tax", 0) or 0)
+            totals["العمولات"] += float(record.get("commissions", 0) or 0)
+            totals["عدد السيارات"] += int(record.get("cars_count", 0) or 0)
+            totals["الصافي"] += float(record.get("net", 0) or 0)
+    for day, record in st.session_state.daily_archive.items():
+        month = str(day)[:7]
+        totals = monthly_totals.setdefault(month, {
+            "المبيعات": 0.0, "المصروفات": 0.0, "الضريبة": 0.0,
+            "العمولات": 0.0, "عدد السيارات": 0, "الصافي": 0.0,
+        })
+        totals["المبيعات"] += float(record.get("sales", 0) or 0)
+        totals["المصروفات"] += float(record.get("expenses", 0) or 0)
+        totals["الضريبة"] += float(record.get("tax", 0) or 0)
+        totals["العمولات"] += float(record.get("commissions", 0) or 0)
+        totals["عدد السيارات"] += int(record.get("cars_count", 0) or 0)
+        totals["الصافي"] += float(record.get("net", 0) or 0)
+    current_month = dt.datetime.now().strftime("%Y-%m")
+    if sales_today or expenses_today:
+        totals = monthly_totals.setdefault(current_month, {
+            "المبيعات": 0.0, "المصروفات": 0.0, "الضريبة": 0.0,
+            "العمولات": 0.0, "عدد السيارات": 0, "الصافي": 0.0,
+        })
+        totals["المبيعات"] += sales_today
+        totals["المصروفات"] += expenses_today
+        totals["الضريبة"] += vat_today
+        totals["العمولات"] += commissions_today
+        totals["عدد السيارات"] += len(service_invoices)
+        totals["الصافي"] += net_today
+    monthly_summary_rows = [
+        {"الشهر": month, **totals}
+        for month, totals in sorted(monthly_totals.items())
+    ]
+
     tab_days, tab_months = st.tabs(["📁 أرشيف الأيام", "🗄️ الأرشيف الشهري"])
     with tab_days:
         if st.session_state.daily_archive:
@@ -1086,12 +1638,16 @@ elif page == "archive":
         else:
             st.info("لا يوجد أرشيف أيام مغلقة.")
     with tab_months:
-        if st.session_state.monthly_archive:
-            for month, records in st.session_state.monthly_archive.items():
-                with st.expander(f"أرشيف شهر {month}"):
-                    st.json(records)
+        if monthly_summary_rows:
+            monthly_df = pd.DataFrame(monthly_summary_rows)
+            st.dataframe(monthly_df, use_container_width=True, hide_index=True)
+            st.bar_chart(monthly_df.set_index("الشهر")[["المبيعات", "الصافي"]])
         else:
             st.info("لا يوجد أرشيف شهري.")
+        for month, records in st.session_state.monthly_archive.items():
+            with st.expander(f"تفاصيل أرشيف شهر {month}"):
+                st.json(records)
+
     st.divider()
     st.subheader("تنزيل كشف الأرشيف")
     archive_rows = []
@@ -1133,8 +1689,17 @@ elif page == "archive":
                 mime="application/pdf",
                 key="download_archive_report_pdf",
             )
+    if archive_rows or monthly_summary_rows:
+        archive_excel = archive_excel_bytes(archive_rows, monthly_summary_rows)
+        st.download_button(
+            "📊 تحميل الأرشيف اليومي والشهري Excel",
+            data=archive_excel,
+            file_name="sabiha_archive_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_archive_report_excel",
+        )
     else:
-        st.caption("لا توجد سجلات يومية قابلة للتنزيل حالياً.")
+        st.caption("لا توجد سجلات قابلة للتنزيل حالياً.")
 
 
 # =============================================================================
@@ -1142,11 +1707,65 @@ elif page == "archive":
 # =============================================================================
 elif page == "commissions":
     st.markdown("## 💸 العمولات والسلفيات")
+    commission_report_rows = []
+    for worker in st.session_state.workers:
+        if not isinstance(worker, dict) or not worker.get("name"):
+            continue
+        worker_name = worker["name"]
+        worker_invoices = worker_commission_invoices(worker_name)
+        earned = sum(
+            float(inv.get("commission_share", 0))
+            for inv in worker_invoices
+            if inv.get("status", "Active") == "Active"
+        )
+        advance = float(worker.get("advance", 0))
+        commission_report_rows.append({
+            "الفني": worker_name,
+            "عدد الفواتير": sum(1 for inv in worker_invoices if inv.get("status", "Active") == "Active"),
+            "إجمالي العمولة": earned,
+            "السلف والمبالغ المصروفة": advance,
+            "المستحق الحالي": earned - advance,
+        })
+    if commission_report_rows:
+        commission_df = pd.DataFrame(commission_report_rows)
+        st.dataframe(commission_df, use_container_width=True, hide_index=True)
+        commission_buffer = BytesIO()
+        with pd.ExcelWriter(commission_buffer, engine="openpyxl") as writer:
+            commission_df.to_excel(writer, index=False, sheet_name="عمولات الفنيين")
+        st.download_button(
+            "📊 تحميل تقرير العمولات Excel",
+            data=commission_buffer.getvalue(),
+            file_name="sabiha_worker_commissions.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_worker_commissions_excel",
+        )
+        commission_pdf_rows = [[
+            "الفني", "عدد الفواتير", "العمولات", "السلف", "المستحق"
+        ]] + [[
+            str(row["الفني"]), str(row["عدد الفواتير"]),
+            f"{float(row['إجمالي العمولة']):.2f}",
+            f"{float(row['السلف والمبالغ المصروفة']):.2f}",
+            f"{float(row['المستحق الحالي']):.2f}",
+        ] for row in commission_report_rows]
+        commission_pdf = build_pdf(
+            "تقرير عمولات الفنيين - Sabiha Hub",
+            [f"عدد الفنيين: {len(commission_report_rows)}"],
+            commission_pdf_rows,
+        )
+        if commission_pdf:
+            st.download_button(
+                "📄 تحميل تقرير العمولات PDF",
+                data=commission_pdf,
+                file_name="sabiha_worker_commissions.pdf",
+                mime="application/pdf",
+                key="download_worker_commissions_pdf",
+            )
+    st.divider()
     for index, worker in enumerate(st.session_state.workers):
         if not isinstance(worker, dict) or not worker.get("name"):
             continue
         name = worker["name"]
-        worker_invoices = st.session_state.session_state_invoices.get(name, [])
+        worker_invoices = worker_commission_invoices(name)
         earned = sum(
             float(inv.get("commission_share", 0))
             for inv in worker_invoices
@@ -1204,10 +1823,152 @@ elif page == "expenses":
             "operational": operational,
             "utilities": utilities,
         }
+        st.session_state["_pending_audit_event"] = {
+            "action": "expenses_updated",
+            "entity": "business_expenses",
+            "entity_id": dt.date.today().isoformat(),
+            "details": {"total": rent + operational + utilities},
+        }
         save_system_data()
         st.success("تم حفظ المصروفات.")
         st.rerun()
     st.metric("إجمالي مصروفات اليوم", f"{rent + operational + utilities:.2f} ج.م")
+
+
+# =============================================================================
+# Owner-only AI business advisor
+# =============================================================================
+elif page == "ai":
+    st.markdown("## 🧠 مساعد Sabiha الذكي")
+    st.caption(
+        "حلّل أداء المغسلة واسأل عن المبيعات والعمولات والطلبات. "
+        "المساعد يقدم توصيات فقط ولا يغيّر أي بيانات."
+    )
+    api_key, ai_model = get_openai_config()
+    if not api_key:
+        st.info(
+            "لتفعيل المساعد، أضف OPENAI_API_KEY في Streamlit Secrets تحت قسم "
+            "[openai]. لا تضع المفتاح في GitHub أو ترسله في المحادثة."
+        )
+    else:
+        st.caption(
+            f"النموذج: {ai_model} · يتم إرسال مؤشرات مجمعة فقط، دون أسماء العملاء "
+            "أو أرقام هواتفهم أو لوحات السيارات."
+        )
+        ai_question = st.text_area(
+            "ما الذي تريد تحليله؟",
+            value="حلل أداء اليوم، وحدد أهم 3 فرص لتحسين المبيعات والربحية.",
+            height=100,
+            key="ai_business_question",
+        )
+        if st.button("✨ تحليل البيانات بالذكاء الاصطناعي", type="primary"):
+            st.session_state["ai_business_last_answer"] = ""
+            service_mix = {}
+            payment_mix = {}
+            for invoice in active_invoices:
+                payment_name = str(invoice.get("payment") or "غير محدد")
+                payment_mix[payment_name] = payment_mix.get(payment_name, 0) + float(invoice.get("total", 0) or 0)
+                if invoice.get("sale_type", "service") == "service":
+                    service_name = str(invoice.get("service") or "غير محدد")
+                    service_mix[service_name] = service_mix.get(service_name, 0) + 1
+
+            order_status_counts = {}
+            for order in st.session_state.get("business_orders", []):
+                status_name = str(order.get("status") or "غير محدد")
+                order_status_counts[status_name] = order_status_counts.get(status_name, 0) + 1
+
+            recent_archive = []
+            for day_name, record in list(st.session_state.daily_archive.items())[-7:]:
+                recent_archive.append({
+                    "day": str(day_name),
+                    "sales": float(record.get("sales", 0) or 0),
+                    "expenses": float(record.get("expenses", 0) or 0),
+                    "estimated_tax": float(record.get("tax", 0) or 0),
+                    "commissions": float(record.get("commissions", 0) or 0),
+                    "net_estimate": float(record.get("net", 0) or 0),
+                    "cars_count": int(record.get("cars_count", 0) or 0),
+                })
+
+            snapshot = {
+                "currency_as_displayed": "ج.م",
+                "current_period_sales": round(sales_today, 2),
+                "current_period_expenses": round(expenses_today, 2),
+                "estimated_tax": round(vat_today, 2),
+                "commissions": round(commissions_today, 2),
+                "estimated_net": round(net_today, 2),
+                "active_invoice_count": len(active_invoices),
+                "refunded_invoice_count": len(refunded_invoices),
+                "average_active_invoice": round(
+                    sales_today / len(active_invoices), 2
+                ) if active_invoices else 0,
+                "sales_by_payment_method": payment_mix,
+                "service_counts": service_mix,
+                "open_orders_by_status": order_status_counts,
+                "recent_closed_days": recent_archive,
+                "active_worker_count": len(workers),
+                "configured_commission_rate_percent": float(st.session_state.commission_rate),
+                "vat_rate_percent": vat_rate,
+                "vat_included_in_sales": vat_included,
+            }
+            with st.spinner("المساعد الذكي بيحلل مؤشرات التشغيل..."):
+                try:
+                    answer = analyze_business(
+                        api_key, ai_model, snapshot, ai_question[:2000]
+                    )
+                    st.session_state["ai_business_last_answer"] = answer
+                    try:
+                        append_audit_log(
+                            get_supabase_client(),
+                            actor=str(st.session_state.get("current_user") or "owner"),
+                            action="ai_business_analysis",
+                            entity="business_app_state",
+                            entity_id="aggregate_metrics",
+                            details={
+                                "model": ai_model,
+                                "question_length": len(ai_question.strip()),
+                            },
+                        )
+                    except Exception:
+                        st.warning("اكتمل التحليل، لكن تعذر حفظ حدث التحليل في سجل التدقيق.")
+                except Exception:
+                    st.error(
+                        "تعذر تنفيذ التحليل. راجع مفتاح OpenAI وإعدادات الفوترة "
+                        "واتصال الإنترنت، ثم حاول مرة أخرى."
+                    )
+        if st.session_state.get("ai_business_last_answer"):
+            st.divider()
+            st.markdown("### نتيجة التحليل")
+            st.markdown(st.session_state["ai_business_last_answer"])
+            st.caption("راجع الأرقام الأصلية قبل اتخاذ أي قرار مالي أو تشغيلي.")
+
+# =============================================================================
+# Owner-only audit log
+# =============================================================================
+elif page == "audit":
+    st.markdown("## 🧾 سجل تدقيق العمليات")
+    client = get_supabase_client()
+    if client is None:
+        st.warning("سجل التدقيق يحتاج ربط Supabase من إعدادات Streamlit Secrets.")
+    else:
+        try:
+            response = (
+                client.table("business_audit_log")
+                .select("audit_id,actor,action,entity,entity_id,details,created_at")
+                .order("created_at", desc=True)
+                .limit(200)
+                .execute()
+            )
+            audit_rows = response.data or []
+            if audit_rows:
+                st.dataframe(
+                    pd.DataFrame(audit_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("لا توجد عمليات مسجلة حتى الآن.")
+        except Exception:
+            st.error("تعذر تحميل سجل التدقيق من قاعدة البيانات.")
 
 
 # =============================================================================
@@ -1263,6 +2024,28 @@ elif page == "settings":
             save_system_data()
             st.success("تم حفظ نسبة العمولة.")
             st.rerun()
+        st.divider()
+        st.subheader("إعدادات الضريبة")
+        vat_rate_edit = st.number_input(
+            "نسبة الضريبة (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=float(st.session_state.get("vat_rate_percent", 14.0)),
+            step=0.5,
+            key="vat_rate_edit",
+        )
+        vat_included_edit = st.checkbox(
+            "السعر المسجل في الفاتورة شامل الضريبة",
+            value=bool(st.session_state.get("vat_included_in_sales", False)),
+            key="vat_included_edit",
+        )
+        st.caption("عند تفعيل الشمول، نستخرج جزء الضريبة من الإجمالي. عند إلغاء التفعيل، نحسب النسبة على المبيعات قبل الضريبة.")
+        if st.button("حفظ إعدادات الضريبة"):
+            st.session_state.vat_rate_percent = float(vat_rate_edit)
+            st.session_state.vat_included_in_sales = bool(vat_included_edit)
+            if save_system_data():
+                st.success("تم حفظ إعدادات الضريبة.")
+                st.rerun()
         st.divider()
         st.subheader("إضافة خدمة")
         s1, s2, s3 = st.columns(3)
@@ -1391,6 +2174,10 @@ elif page == "settings":
                         st.rerun()
         st.divider()
         st.subheader("إنشاء حساب موظف")
+        st.caption(
+            "لإظهار الطلبات المسندة للفني، اجعل اسم الموظف في الحساب مطابقاً "
+            "لاسمه في قائمة الفنيين وامنحه صلاحية متابعة الطلبات."
+        )
         n1, n2, n3 = st.columns(3)
         with n1:
             display = st.text_input("اسم الموظف الجديد", key="create_display")
@@ -1401,7 +2188,7 @@ elif page == "settings":
         permissions = st.multiselect(
             "صلاحيات الموظف الجديد",
             PAGES,
-            default=["🛒 كاشير الاستقبال POS"],
+            default=["🛒 كاشير الاستقبال POS", "🚗 متابعة الطلبات"],
             key="create_permissions",
         )
         if st.button("إنشاء حساب الموظف"):
@@ -1431,9 +2218,12 @@ elif page == "settings":
             "credentials": st.session_state.credentials,
             "workers": st.session_state.workers,
             "commission_rate": st.session_state.commission_rate,
+            "vat_rate_percent": st.session_state.get("vat_rate_percent", 14.0),
+            "vat_included_in_sales": st.session_state.get("vat_included_in_sales", False),
             "services": st.session_state.services,
             "products": st.session_state.products,
             "session_state_invoices": st.session_state.session_state_invoices,
+            "business_orders": st.session_state.get("business_orders", []),
             "daily_sales": st.session_state.daily_sales,
             "daily_expenses": st.session_state.daily_expenses,
             "daily_archive": st.session_state.daily_archive,
@@ -1451,18 +2241,26 @@ elif page == "settings":
         if st.button("استعادة النسخة الاحتياطية", disabled=not (uploaded_backup and confirm_restore)):
             try:
                 imported = json.load(uploaded_backup)
+                if not isinstance(imported, dict):
+                    raise ValueError("يجب أن يحتوي ملف النسخة الاحتياطية على كائن JSON.")
+                if "credentials" in imported and not isinstance(imported["credentials"], dict):
+                    raise ValueError("قسم الحسابات في النسخة الاحتياطية غير صالح.")
                 merged = deep_merge(default_data(), imported)
                 for key in [
-                    "credentials", "workers", "commission_rate", "services", "products",
-                    "session_state_invoices", "daily_sales", "daily_expenses",
+                    "credentials", "workers", "commission_rate", "vat_rate_percent",
+                    "vat_included_in_sales", "services", "products",
+                    "session_state_invoices", "business_orders", "daily_sales", "daily_expenses",
                     "daily_archive", "monthly_archive",
                 ]:
                     st.session_state[key] = merged[key]
-                save_system_data()
-                st.success("تمت استعادة النسخة الاحتياطية.")
-                st.rerun()
-            except (json.JSONDecodeError, TypeError, KeyError) as error:
-                st.error(f"ملف النسخة الاحتياطية غير صالح: {error}")
+                # Legacy JSON backups may contain plaintext passwords; hash them
+                # before the restored state is written to Supabase.
+                migrate_plaintext_passwords(st.session_state.credentials)
+                if save_system_data():
+                    st.success("تمت استعادة النسخة الاحتياطية وتأمين كلمات المرور.")
+                    st.rerun()
+            except (json.JSONDecodeError, TypeError, KeyError, ValueError) as error:
+                st.error(f"ملف النسخة الاحتياطية غير صالح أو تعذر حفظه: {error}")
 
 
 # =============================================================================
