@@ -1175,54 +1175,62 @@ elif page == "pos":
 # Live service orders and worker status tracking
 # =============================================================================
 elif page == "orders":
-    st.markdown("## 🚗 متابعة الطلبات وحالة السيارات")
-    all_orders = st.session_state.get("business_orders", [])
-    if st.session_state.user_role == "owner":
-        visible_orders = all_orders
-    else:
-        visible_orders = [
-            order for order in all_orders
-            if st.session_state.current_user in (order.get("assigned_workers") or [])
-        ]
+    @st.fragment(run_every="5s")
+    def render_orders():
+        latest = load_system_data()
+        if not st.session_state.get("_storage_error", False):
+            st.session_state["business_orders"] = latest.get("business_orders", [])
 
-    status_labels = {
-        "received": "تم الاستلام",
-        "in_progress": "جاري التنفيذ",
-        "quality_check": "مراجعة الجودة",
-        "completed": "اكتملت الخدمة",
-        "delivered": "تم التسليم",
-        "cancelled": "ملغي",
-    }
-    status_values = list(status_labels)
-    st.caption("تتحدث لوحة المالك تلقائياً كل 5 ثوانٍ. الموظف يرى الطلبات المسندة إليه فقط.")
-    if not visible_orders:
-        st.info("لا توجد طلبات مسندة أو مسجلة حالياً.")
-    for index, order in enumerate(reversed(visible_orders)):
-        order_number = order.get("order_number", f"order-{index}")
-        current_status = order.get("status", "received")
-        with st.expander(
-            f"{order_number} · لوحة {order.get('plate_number', '---')} · "
-            f"{status_labels.get(current_status, current_status)}",
-            expanded=current_status in ("received", "in_progress", "quality_check"),
-        ):
-            c1, c2, c3 = st.columns(3)
-            c1.write(f"**الخدمة:** {order.get('service_name', '---')}")
-            c2.write(f"**السيارة:** {order.get('vehicle_type', '---')}")
-            c3.write(f"**الفنيون:** {', '.join(order.get('assigned_workers') or []) or '---'}")
-            st.caption(f"وقت الإنشاء: {order.get('created_at', '---')}")
-            selected_status = st.selectbox(
-                "تحديث حالة الطلب",
-                status_values,
-                index=status_values.index(current_status) if current_status in status_values else 0,
-                format_func=lambda value: status_labels[value],
-                key=f"order_status_{order_number}",
-            )
-            if st.button("حفظ حالة الطلب", key=f"save_order_{order_number}"):
-                order["status"] = selected_status
-                order["updated_at"] = dt.datetime.now().isoformat(timespec="seconds")
-                if save_system_data():
-                    st.success("تم تحديث حالة الطلب وتسجيل العملية.")
-                    st.rerun()
+        st.markdown("## 🚗 متابعة الطلبات وحالة السيارات")
+        all_orders = st.session_state.get("business_orders", [])
+        if st.session_state.user_role == "owner":
+            visible_orders = all_orders
+        else:
+            visible_orders = [
+                order for order in all_orders
+                if st.session_state.current_user in (order.get("assigned_workers") or [])
+            ]
+
+        status_labels = {
+            "received": "تم الاستلام",
+            "in_progress": "جاري التنفيذ",
+            "quality_check": "مراجعة الجودة",
+            "completed": "اكتملت الخدمة",
+            "delivered": "تم التسليم",
+            "cancelled": "ملغي",
+        }
+        status_values = list(status_labels)
+        st.caption("مزامنة تلقائية كل 5 ثوانٍ. المالك يرى كل الطلبات، والموظف يرى الطلبات المسندة إليه.")
+        if not visible_orders:
+            st.info("لا توجد طلبات مسندة أو مسجلة حالياً.")
+        for index, order in enumerate(reversed(visible_orders)):
+            order_number = order.get("order_number", f"order-{index}")
+            current_status = order.get("status", "received")
+            with st.expander(
+                f"{order_number} · لوحة {order.get('plate_number', '---')} · "
+                f"{status_labels.get(current_status, current_status)}",
+                expanded=current_status in ("received", "in_progress", "quality_check"),
+            ):
+                c1, c2, c3 = st.columns(3)
+                c1.write(f"**الخدمة:** {order.get('service_name', '---')}")
+                c2.write(f"**السيارة:** {order.get('vehicle_type', '---')}")
+                c3.write(f"**الفنيون:** {', '.join(order.get('assigned_workers') or []) or '---'}")
+                st.caption(f"وقت الإنشاء: {order.get('created_at', '---')}")
+                selected_status = st.selectbox(
+                    "تحديث حالة الطلب",
+                    status_values,
+                    index=status_values.index(current_status) if current_status in status_values else 0,
+                    format_func=lambda value: status_labels[value],
+                    key=f"order_status_{order_number}",
+                )
+                if st.button("حفظ حالة الطلب", key=f"save_order_{order_number}"):
+                    order["status"] = selected_status
+                    order["updated_at"] = dt.datetime.now().astimezone().isoformat(timespec="seconds")
+                    if save_system_data():
+                        st.success("تم تحديث حالة الطلب وتسجيل العملية.")
+                        st.rerun()
+
+    render_orders()
 
 
 # =============================================================================
