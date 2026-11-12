@@ -12,6 +12,8 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - build/**
+    - lib/*backup*.dart
+    - lib/*before*.dart
     - android/**
     - ios/**
     - web/**

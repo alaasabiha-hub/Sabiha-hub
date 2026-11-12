@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <defs>
+    <linearGradient id="silverGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="35%" stop-color="#c4cad4"/>
+      <stop offset="70%" stop-color="#6e7785"/>
+      <stop offset="100%" stop-color="#dce1e8"/>
+    </linearGradient>
+    <linearGradient id="silverGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e2e6ec"/>
+      <stop offset="50%" stop-color="#8b94a3"/>
+      <stop offset="100%" stop-color="#434b57"/>
+    </linearGradient>
+    <linearGradient id="navyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#223663"/>
+      <stop offset="50%" stop-color="#14213d"/>
+      <stop offset="100%" stop-color="#0a1124"/>
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="800" height="800" fill="#ffffff"/>
+  <g transform="translate(400, 250)" filter="url(#dropShadow)">
+    <polygon points="0,-130 112,-65 112,65 0,130 -112,65 -112,-65" fill="url(#navyGrad)"/>
+    <polygon points="0,-130 112,-65 82,-48 0,-95 -82,-48 -112,-65" fill="url(#silverGrad1)"/>
+    <polygon points="-112,-65 -82,-48 -82,-5 -112,12" fill="url(#silverGrad2)"/>
+    <polygon points="-112,12 -82,-5 82,45 112,28 112,65 82,48 -82,-2" fill="url(#silverGrad1)"/>
+    <polygon points="82,-48 112,-65 112,65 82,48" fill="url(#silverGrad2)"/>
+    <polygon points="62,-36 82,-48 82,48 62,36" fill="url(#navyGrad)"/>
+    <polygon points="-82,15 -62,26 -62,75 -82,65" fill="url(#navyGrad)"/>
+    <polygon points="-112,25 -82,15 -82,65 -112,65" fill="url(#silverGrad1)"/>
+    <polygon points="-112,65 -82,48 0,95 82,48 112,65 0,130" fill="url(#silverGrad2)"/>
+    <polygon points="-45,-15 45,15 45,32 -45,2" fill="url(#navyGrad)"/>
+  </g>
+  <text x="400" y="455" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="bold" fill="#172544" text-anchor="middle" letter-spacing="-1">Sabiha Hub</text>
+  <text x="400" y="510" font-family="Tahoma, 'Segoe UI', Arial, sans-serif" font-size="30" font-weight="bold" fill="#1e2d4d" text-anchor="middle">مفهوم جديد للعناية المتكاملة</text>
+  <text x="400" y="552" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="500" fill="#2b3d63" text-anchor="middle" letter-spacing="0.5">A New Concept in Total Care</text>
+</svg>

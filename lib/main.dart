@@ -1,11 +1,10 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String supabaseUrl =
-    'https://cujfeqsuanwxobtupxaz.supabase.co';
+const String supabaseUrl = 'https://cujfeqsuanwxobtupxaz.supabase.co';
 
 const String supabasePublishableKey =
     'sb_publishable_R4sMzFLo99u_tJCdiaE0HQ_4gqIff5J';
@@ -17,7 +16,7 @@ Future<void> main() async {
 
   await Supabase.initialize(
     url: supabaseUrl,
-    anonKey: supabasePublishableKey,
+    publishableKey: supabasePublishableKey,
   );
 
   runApp(const SabihaHubApp());
@@ -70,9 +69,7 @@ class _SabihaHubAppState extends State<SabihaHubApp> {
         home: Scaffold(
           backgroundColor: Color(0xFF071A36),
           body: Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFFC5CBD5),
-            ),
+            child: CircularProgressIndicator(color: Color(0xFFC5CBD5)),
           ),
         ),
       );
@@ -82,10 +79,7 @@ class _SabihaHubAppState extends State<SabihaHubApp> {
       debugShowCheckedModeBanner: false,
       title: 'Sabiha Hub',
       locale: _locale,
-      supportedLocales: const [
-        Locale('ar'),
-        Locale('en'),
-      ],
+      supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -121,10 +115,7 @@ class _SabihaHubAppState extends State<SabihaHubApp> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(
-              color: Color(0xFF2463A6),
-              width: 1.5,
-            ),
+            borderSide: const BorderSide(color: Color(0xFF2463A6), width: 1.5),
           ),
         ),
       ),
@@ -136,10 +127,7 @@ class _SabihaHubAppState extends State<SabihaHubApp> {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      home: HomeScreen(
-        locale: _locale,
-        onLanguageChanged: _changeLanguage,
-      ),
+      home: HomeScreen(locale: _locale, onLanguageChanged: _changeLanguage),
     );
   }
 }
@@ -154,44 +142,15 @@ const Color silver = Color(0xFFC5CBD5);
 
 void showMessage(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message),
-      behavior: SnackBarBehavior.floating,
-    ),
+    SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
   );
 }
 
 Widget brandLogo({double size = 76}) {
-  return Container(
+  return SizedBox(
     width: size,
     height: size,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(size * 0.25),
-      gradient: const LinearGradient(
-        colors: [Color(0xFF174B83), Color(0xFF071A36)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      border: Border.all(color: silver, width: 1.4),
-      boxShadow: [
-        BoxShadow(
-          color: navy.withValues(alpha: 0.18),
-          blurRadius: 15,
-          offset: const Offset(0, 7),
-        ),
-      ],
-    ),
-    child: Center(
-      child: Text(
-        'SH',
-        style: TextStyle(
-          color: silver,
-          fontSize: size * 0.39,
-          fontWeight: FontWeight.w900,
-          letterSpacing: -3,
-        ),
-      ),
-    ),
+    child: SvgPicture.asset('assets/sabiha_logo_mark.svg', fit: BoxFit.contain),
   );
 }
 
@@ -199,21 +158,14 @@ Widget languageButton(
   BuildContext context,
   Future<void> Function(String) onChanged,
 ) {
-  final isArabic =
-      Localizations.localeOf(context).languageCode == 'ar';
+  final isArabic = Localizations.localeOf(context).languageCode == 'ar';
 
   return PopupMenuButton<String>(
     tooltip: tr(context, 'تغيير اللغة', 'Change language'),
     onSelected: onChanged,
     itemBuilder: (context) => [
-      const PopupMenuItem(
-        value: 'ar',
-        child: Text('العربية'),
-      ),
-      const PopupMenuItem(
-        value: 'en',
-        child: Text('English'),
-      ),
+      const PopupMenuItem(value: 'ar', child: Text('العربية')),
+      const PopupMenuItem(value: 'en', child: Text('English')),
     ],
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -263,9 +215,7 @@ class HomeScreen extends StatelessWidget {
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: silver,
-                  side: BorderSide(
-                    color: silver.withValues(alpha: 0.7),
-                  ),
+                  side: BorderSide(color: silver.withValues(alpha: 0.7)),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 11,
                     vertical: 7,
@@ -284,9 +234,7 @@ class HomeScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const StaffLoginScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const StaffLoginScreen()),
                   );
                 },
               ),
@@ -317,10 +265,7 @@ class HomeScreen extends StatelessWidget {
                     'العناية بسيارتك تبدأ من هنا',
                     'Your car care starts here',
                   ),
-                  style: const TextStyle(
-                    color: silver,
-                    fontSize: 16,
-                  ),
+                  style: const TextStyle(color: silver, fontSize: 16),
                 ),
                 const SizedBox(height: 55),
                 Padding(
@@ -401,6 +346,12 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   Future<void> _login() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final loginFailedMessage = tr(context, 'تعذر تسجيل الدخول', 'Login failed');
+    final customerProfileMissingMessage = tr(
+      context,
+      'لم يتم العثور على ملف العميل. تواصل مع الإدارة.',
+      'Customer profile was not found. Please contact support.',
+    );
 
     if (email.isEmpty || password.isEmpty) {
       showMessage(
@@ -425,9 +376,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       final user = response.user;
 
       if (user == null) {
-        throw Exception(
-          tr(context, 'تعذر تسجيل الدخول', 'Login failed'),
-        );
+        throw Exception(loginFailedMessage);
       }
 
       final profile = await supabase
@@ -438,13 +387,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
 
       if (profile == null) {
         await supabase.auth.signOut();
-        throw Exception(
-          tr(
-            context,
-            'لم يتم العثور على ملف العميل. تواصل مع الإدارة.',
-            'Customer profile was not found. Please contact support.',
-          ),
-        );
+        throw Exception(customerProfileMissingMessage);
       }
 
       if (!mounted) return;
@@ -453,8 +396,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => CustomerDashboardScreen(
-            customerName:
-                user.userMetadata?['full_name']?.toString() ?? '',
+            customerName: user.userMetadata?['full_name']?.toString() ?? '',
           ),
         ),
       );
@@ -462,10 +404,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       if (mounted) showMessage(context, e.message);
     } catch (e) {
       if (mounted) {
-        showMessage(
-          context,
-          e.toString().replaceFirst('Exception: ', ''),
-        );
+        showMessage(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -475,9 +414,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr(context, 'دخول العميل', 'Customer Login')),
-      ),
+      appBar: AppBar(title: Text(tr(context, 'دخول العميل', 'Customer Login'))),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -487,11 +424,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
               brandLogo(),
               const SizedBox(height: 15),
               Text(
-                tr(
-                  context,
-                  'مرحباً بك في Sabiha Hub',
-                  'Welcome to Sabiha Hub',
-                ),
+                tr(context, 'مرحباً بك في Sabiha Hub', 'Welcome to Sabiha Hub'),
                 style: const TextStyle(
                   color: navy,
                   fontSize: 21,
@@ -508,11 +441,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 autocorrect: false,
                 enableSuggestions: false,
                 decoration: InputDecoration(
-                  labelText: tr(
-                    context,
-                    'البريد الإلكتروني',
-                    'Email address',
-                  ),
+                  labelText: tr(context, 'البريد الإلكتروني', 'Email address'),
                   prefixIcon: const Icon(Icons.email_outlined),
                 ),
               ),
@@ -533,9 +462,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                       setState(() => _hidePassword = !_hidePassword);
                     },
                     icon: Icon(
-                      _hidePassword
-                          ? Icons.visibility
-                          : Icons.visibility_off,
+                      _hidePassword ? Icons.visibility : Icons.visibility_off,
                     ),
                   ),
                 ),
@@ -570,9 +497,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                     ),
                   ),
                   child: _loading
-                      ? const CircularProgressIndicator(
-                          color: Colors.white,
-                        )
+                      ? const CircularProgressIndicator(color: Colors.white)
                       : Text(
                           tr(context, 'تسجيل الدخول', 'Sign in'),
                           style: const TextStyle(
@@ -586,9 +511,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    tr(context, 'ليس لديك حساب؟', 'New customer?'),
-                  ),
+                  Text(tr(context, 'ليس لديك حساب؟', 'New customer?')),
                   TextButton(
                     onPressed: () {
                       Navigator.push(
@@ -683,14 +606,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (password != confirmPassword) {
       showMessage(
         context,
-        tr(
-          context,
-          'كلمتا المرور غير متطابقتين',
-          'Passwords do not match',
-        ),
+        tr(context, 'كلمتا المرور غير متطابقتين', 'Passwords do not match'),
       );
       return;
     }
+
+    final signupFailedMessage = tr(
+      context,
+      'تعذر إنشاء الحساب',
+      'Could not create account',
+    );
 
     setState(() => _loading = true);
 
@@ -698,17 +623,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final response = await supabase.auth.signUp(
         email: email,
         password: password,
-        data: {
-          'full_name': name,
-          'phone': phone,
-          'date_of_birth': birthDate,
-        },
+        data: {'full_name': name, 'phone': phone, 'date_of_birth': birthDate},
       );
 
       if (response.user == null) {
-        throw Exception(
-          tr(context, 'تعذر إنشاء الحساب', 'Could not create account'),
-        );
+        throw Exception(signupFailedMessage);
       }
 
       if (!mounted) return;
@@ -716,20 +635,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => OtpVerificationScreen(
-            email: email,
-            customerName: name,
-          ),
+          builder: (_) =>
+              OtpVerificationScreen(email: email, customerName: name),
         ),
       );
     } on AuthException catch (e) {
       if (mounted) showMessage(context, e.message);
     } catch (e) {
       if (mounted) {
-        showMessage(
-          context,
-          e.toString().replaceFirst('Exception: ', ''),
-        );
+        showMessage(context, e.toString().replaceFirst('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -793,11 +707,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 autocorrect: false,
                 enableSuggestions: false,
                 decoration: InputDecoration(
-                  labelText: tr(
-                    context,
-                    'البريد الإلكتروني',
-                    'Email address',
-                  ),
+                  labelText: tr(context, 'البريد الإلكتروني', 'Email address'),
                   prefixIcon: const Icon(Icons.email_outlined),
                 ),
               ),
@@ -834,9 +744,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       });
                     },
                     icon: Icon(
-                      _hidePassword
-                          ? Icons.visibility
-                          : Icons.visibility_off,
+                      _hidePassword ? Icons.visibility : Icons.visibility_off,
                     ),
                   ),
                 ),
@@ -882,9 +790,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     foregroundColor: Colors.white,
                   ),
                   child: _loading
-                      ? const CircularProgressIndicator(
-                          color: Colors.white,
-                        )
+                      ? const CircularProgressIndicator(color: Colors.white)
                       : Text(
                           tr(
                             context,
@@ -914,12 +820,10 @@ class OtpVerificationScreen extends StatefulWidget {
   });
 
   @override
-  State<OtpVerificationScreen> createState() =>
-      _OtpVerificationScreenState();
+  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState
-    extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final _codeController = TextEditingController();
   bool _loading = false;
 
@@ -958,9 +862,8 @@ class _OtpVerificationScreenState
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => CustomerDashboardScreen(
-            customerName: widget.customerName,
-          ),
+          builder: (_) =>
+              CustomerDashboardScreen(customerName: widget.customerName),
         ),
         (route) => false,
       );
@@ -975,10 +878,7 @@ class _OtpVerificationScreenState
 
   Future<void> _resend() async {
     try {
-      await supabase.auth.resend(
-        email: widget.email,
-        type: OtpType.signup,
-      );
+      await supabase.auth.resend(email: widget.email, type: OtpType.signup);
 
       if (mounted) {
         showMessage(
@@ -999,9 +899,7 @@ class _OtpVerificationScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          tr(context, 'تأكيد البريد الإلكتروني', 'Verify Email'),
-        ),
+        title: Text(tr(context, 'تأكيد البريد الإلكتروني', 'Verify Email')),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -1054,19 +952,13 @@ class _OtpVerificationScreenState
                   foregroundColor: Colors.white,
                 ),
                 child: _loading
-                    ? const CircularProgressIndicator(
-                        color: Colors.white,
-                      )
-                    : Text(
-                        tr(context, 'تأكيد الحساب', 'Verify account'),
-                      ),
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(tr(context, 'تأكيد الحساب', 'Verify account')),
               ),
             ),
             TextButton(
               onPressed: _resend,
-              child: Text(
-                tr(context, 'إعادة إرسال الرمز', 'Resend code'),
-              ),
+              child: Text(tr(context, 'إعادة إرسال الرمز', 'Resend code')),
             ),
           ],
         ),
@@ -1080,8 +972,7 @@ class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() =>
-      _ForgotPasswordScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
@@ -1206,11 +1097,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (password != confirmPassword) {
       showMessage(
         context,
-        tr(
-          context,
-          'كلمتا المرور غير متطابقتين',
-          'Passwords do not match',
-        ),
+        tr(context, 'كلمتا المرور غير متطابقتين', 'Passwords do not match'),
       );
       return;
     }
@@ -1218,9 +1105,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _loading = true);
 
     try {
-      await supabase.auth.updateUser(
-        UserAttributes(password: password),
-      );
+      await supabase.auth.updateUser(UserAttributes(password: password));
 
       if (!mounted) return;
 
@@ -1292,11 +1177,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           autocorrect: false,
           enableSuggestions: false,
           decoration: InputDecoration(
-            labelText: tr(
-              context,
-              'البريد الإلكتروني',
-              'Email address',
-            ),
+            labelText: tr(context, 'البريد الإلكتروني', 'Email address'),
             prefixIcon: const Icon(Icons.email_outlined),
           ),
         ),
@@ -1324,10 +1205,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Text(
           _emailController.text.trim(),
           textDirection: TextDirection.ltr,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: royalBlue,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, color: royalBlue),
         ),
         const SizedBox(height: 25),
         TextField(
@@ -1350,9 +1228,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SizedBox(height: 8),
         TextButton(
           onPressed: _loading ? null : _resendResetCode,
-          child: Text(
-            tr(context, 'إعادة إرسال الرمز', 'Resend code'),
-          ),
+          child: Text(tr(context, 'إعادة إرسال الرمز', 'Resend code')),
         ),
         TextButton(
           onPressed: _loading
@@ -1427,9 +1303,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 });
               },
               icon: Icon(
-                _hideConfirmPassword
-                    ? Icons.visibility
-                    : Icons.visibility_off,
+                _hideConfirmPassword ? Icons.visibility : Icons.visibility_off,
               ),
             ),
           ),
@@ -1476,9 +1350,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          tr(context, 'استعادة كلمة المرور', 'Reset Password'),
-        ),
+        title: Text(tr(context, 'استعادة كلمة المرور', 'Reset Password')),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -1486,11 +1358,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: Column(
             children: [
               const SizedBox(height: 20),
-              const Icon(
-                Icons.lock_reset,
-                size: 75,
-                color: royalBlue,
-              ),
+              const Icon(Icons.lock_reset, size: 75, color: royalBlue),
               const SizedBox(height: 20),
               Text(
                 tr(
@@ -1532,10 +1400,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 class CustomerDashboardScreen extends StatelessWidget {
   final String customerName;
 
-  const CustomerDashboardScreen({
-    super.key,
-    required this.customerName,
-  });
+  const CustomerDashboardScreen({super.key, required this.customerName});
 
   Future<void> _logout(BuildContext context) async {
     await supabase.auth.signOut();
@@ -1583,20 +1448,14 @@ class CustomerDashboardScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [navy, royalBlue],
-                  ),
+                  gradient: const LinearGradient(colors: [navy, royalBlue]),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      tr(
-                        context,
-                        'أهلاً بك، $name',
-                        'Welcome, $name',
-                      ),
+                      tr(context, 'أهلاً بك، $name', 'Welcome, $name'),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 21,
@@ -1644,19 +1503,13 @@ class CustomerDashboardScreen extends StatelessWidget {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyVehiclesScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const MyVehiclesScreen()),
                   );
                 },
               ),
               _DashboardTile(
                 icon: Icons.receipt_long_outlined,
-                title: tr(
-                  context,
-                  'طلباتي وفواتيري',
-                  'My orders and invoices',
-                ),
+                title: tr(context, 'طلباتي وفواتيري', 'My orders and invoices'),
                 subtitle: tr(
                   context,
                   'متابعة الطلبات والفواتير',
@@ -1695,7 +1548,6 @@ class CustomerDashboardScreen extends StatelessWidget {
     );
   }
 }
-
 
 // شاشة سيارات العميل
 class MyVehiclesScreen extends StatefulWidget {
@@ -1741,21 +1593,15 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _message(
-        tr(context, 'تعذر تحميل السيارات', 'Could not load vehicles'),
-      );
+      _message(tr(context, 'تعذر تحميل السيارات', 'Could not load vehicles'));
     }
   }
 
   void _message(String value) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(value)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value)));
   }
 
-  Future<void> _showVehicleDialog({
-    Map<String, dynamic>? vehicle,
-  }) async {
+  Future<void> _showVehicleDialog({Map<String, dynamic>? vehicle}) async {
     final brand = TextEditingController(
       text: vehicle?['brand']?.toString() ?? '',
     );
@@ -1848,11 +1694,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                       parsedYear < 1950 ||
                       parsedYear > 2100)) {
                 _message(
-                  tr(
-                    context,
-                    'سنة الصنع غير صحيحة',
-                    'Invalid vehicle year',
-                  ),
+                  tr(context, 'سنة الصنع غير صحيحة', 'Invalid vehicle year'),
                 );
                 return;
               }
@@ -1861,9 +1703,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                 'brand': brand.text.trim(),
                 'model': model.text.trim(),
                 'year': parsedYear,
-                'color': color.text.trim().isEmpty
-                    ? null
-                    : color.text.trim(),
+                'color': color.text.trim().isEmpty ? null : color.text.trim(),
                 'plate_number': plate.text.trim(),
               };
 
@@ -1896,7 +1736,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                     SnackBar(
                       content: Text(
                         tr(
-                          context,
+                          dialogContext,
                           'تعذر حفظ السيارة. تحقق من رقم اللوحة والبيانات.',
                           'Could not save vehicle. Check the plate number and details.',
                         ),
@@ -1911,7 +1751,6 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
         ],
       ),
     );
-
   }
 
   Future<void> _deleteVehicle(Map<String, dynamic> vehicle) async {
@@ -1978,108 +1817,105 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _userId.isEmpty
-              ? Center(
-                  child: Text(
-                    tr(
-                      context,
-                      'يرجى تسجيل الدخول مرة أخرى',
-                      'Please sign in again',
+          ? Center(
+              child: Text(
+                tr(
+                  context,
+                  'يرجى تسجيل الدخول مرة أخرى',
+                  'Please sign in again',
+                ),
+              ),
+            )
+          : _vehicles.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.directions_car_outlined,
+                      size: 65,
+                      color: silver,
                     ),
-                  ),
-                )
-              : _vehicles.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.directions_car_outlined,
-                              size: 65,
-                              color: silver,
-                            ),
-                            const SizedBox(height: 15),
-                            Text(
-                              tr(
-                                context,
-                                'لم تضف أي سيارة حتى الآن',
-                                'You have not added any vehicles yet',
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              tr(
-                                context,
-                                'اضغط على إضافة سيارة للبدء',
-                                'Tap Add vehicle to get started',
-                              ),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 15),
+                    Text(
+                      tr(
+                        context,
+                        'لم تضف أي سيارة حتى الآن',
+                        'You have not added any vehicles yet',
                       ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadVehicles,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                        itemCount: _vehicles.length,
-                        itemBuilder: (context, index) {
-                          final vehicle = _vehicles[index];
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      tr(
+                        context,
+                        'اضغط على إضافة سيارة للبدء',
+                        'Tap Add vehicle to get started',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadVehicles,
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                itemCount: _vehicles.length,
+                itemBuilder: (context, index) {
+                  final vehicle = _vehicles[index];
 
-                          final details = [
+                  final details =
+                      [
                             vehicle['year']?.toString(),
                             vehicle['color']?.toString(),
-                          ].where((value) =>
-                              value != null && value.isNotEmpty).join(' • ');
+                          ]
+                          .where((value) => value != null && value.isNotEmpty)
+                          .join(' • ');
 
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: const Color(0xFFEAF0F8),
-                                child: Icon(
-                                  Icons.directions_car,
-                                  color: royalBlue,
-                                ),
-                              ),
-                              title: Text(
-                                '${vehicle['brand']} ${vehicle['model']}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Text(
-                                [
-                                  vehicle['plate_number']?.toString() ?? '',
-                                  details,
-                                ].where((value) => value.isNotEmpty).join('\n'),
-                              ),
-                              isThreeLine: details.isNotEmpty,
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    _showVehicleDialog(vehicle: vehicle);
-                                  } else if (value == 'delete') {
-                                    _deleteVehicle(vehicle);
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Text(tr(context, 'تعديل', 'Edit')),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text(tr(context, 'حذف', 'Delete')),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: const Color(0xFFEAF0F8),
+                        child: Icon(Icons.directions_car, color: royalBlue),
+                      ),
+                      title: Text(
+                        '${vehicle['brand']} ${vehicle['model']}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        [
+                          vehicle['plate_number']?.toString() ?? '',
+                          details,
+                        ].where((value) => value.isNotEmpty).join('\n'),
+                      ),
+                      isThreeLine: details.isNotEmpty,
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            _showVehicleDialog(vehicle: vehicle);
+                          } else if (value == 'delete') {
+                            _deleteVehicle(vehicle);
+                          }
                         },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Text(tr(context, 'تعديل', 'Edit')),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Text(tr(context, 'حذف', 'Delete')),
+                          ),
+                        ],
                       ),
                     ),
+                  );
+                },
+              ),
+            ),
     );
   }
 }
@@ -2103,9 +1939,7 @@ class _DashboardTile extends StatelessWidget {
       color: Colors.white,
       elevation: 1,
       margin: const EdgeInsets.only(bottom: 13),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 17,
@@ -2115,10 +1949,7 @@ class _DashboardTile extends StatelessWidget {
           backgroundColor: const Color(0xFFEAF0F8),
           child: Icon(icon, color: royalBlue),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
@@ -2128,41 +1959,348 @@ class _DashboardTile extends StatelessWidget {
 }
 
 // دخول الموظفين
-class StaffLoginScreen extends StatelessWidget {
+// دخول الموظفين
+class StaffLoginScreen extends StatefulWidget {
   const StaffLoginScreen({super.key});
+
+  @override
+  State<StaffLoginScreen> createState() => _StaffLoginScreenState();
+}
+
+class _StaffLoginScreenState extends State<StaffLoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  bool _loading = false;
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _loading = true);
+
+    try {
+      final response = await supabase.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      final user = response.user;
+
+      if (user == null) {
+        throw Exception('تعذر تسجيل الدخول.');
+      }
+
+      final profile = await supabase
+          .from('staff_profiles')
+          .select('user_id, full_name, role, permissions, is_active')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      if (profile == null || profile['is_active'] != true) {
+        await supabase.auth.signOut();
+        if (!mounted) return;
+        _showMessage(
+          tr(
+            context,
+            'هذا الحساب غير مصرح له بدخول الموظفين.',
+            'This account is not authorized for staff access.',
+          ),
+        );
+        return;
+      }
+
+      final role = profile['role']?.toString() ?? 'employee';
+      final permissions = Map<String, dynamic>.from(
+        profile['permissions'] as Map? ?? {},
+      );
+      final fullName = profile['full_name']?.toString() ?? '';
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StaffDashboardScreen(
+            role: role,
+            permissions: permissions,
+            fullName: fullName,
+          ),
+        ),
+      );
+    } on AuthException catch (e) {
+      if (mounted) _showMessage(e.message);
+    } catch (e) {
+      if (mounted) {
+        _showMessage(
+          tr(
+            context,
+            'حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.',
+            'An error occurred during login. Please try again.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr(context, 'دخول الموظفين', 'Staff Login')),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            brandLogo(),
-            const SizedBox(height: 25),
-            Text(
-              tr(context, 'بوابة الموظفين', 'Staff Portal'),
-              style: const TextStyle(
-                color: navy,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+      appBar: AppBar(title: Text(tr(context, 'دخول الموظفين', 'Staff Login'))),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  brandLogo(),
+                  const SizedBox(height: 25),
+                  Text(
+                    tr(context, 'بوابة الموظفين', 'Staff Portal'),
+                    style: const TextStyle(
+                      color: navy,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textDirection: TextDirection.ltr,
+                    decoration: InputDecoration(
+                      labelText: tr(
+                        context,
+                        'البريد الإلكتروني',
+                        'Email address',
+                      ),
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return tr(
+                          context,
+                          'أدخل البريد الإلكتروني',
+                          'Enter your email',
+                        );
+                      }
+                      if (!value.contains('@')) {
+                        return tr(
+                          context,
+                          'البريد الإلكتروني غير صحيح',
+                          'Enter a valid email',
+                        );
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    textDirection: TextDirection.ltr,
+                    decoration: InputDecoration(
+                      labelText: tr(context, 'كلمة المرور', 'Password'),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return tr(
+                          context,
+                          'أدخل كلمة المرور',
+                          'Enter your password',
+                        );
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 25),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : _login,
+                      child: _loading
+                          ? const SizedBox(
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(tr(context, 'تسجيل الدخول', 'Sign In')),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 15),
-            Text(
-              tr(
-                context,
-                'سيتم ربط تسجيل دخول الموظفين وصلاحيات الإدارة في المرحلة التالية.',
-                'Staff authentication and management permissions will be connected in the next stage.',
-              ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16),
-            ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+// لوحة الموظفين والإدارة
+class StaffDashboardScreen extends StatelessWidget {
+  final String role;
+  final Map<String, dynamic> permissions;
+  final String fullName;
+
+  const StaffDashboardScreen({
+    super.key,
+    required this.role,
+    required this.permissions,
+    required this.fullName,
+  });
+
+  Future<void> _logout(BuildContext context) async {
+    await supabase.auth.signOut();
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HomeScreen(
+          locale: Localizations.localeOf(context),
+          onLanguageChanged: (language) async {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('app_language', language);
+          },
+        ),
+      ),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isOwner = role == 'owner';
+    final isManager = role == 'manager';
+
+    final roleName = isOwner
+        ? tr(context, 'الإدارة', 'Owner')
+        : isManager
+        ? tr(context, 'مدير', 'Manager')
+        : tr(context, 'موظف', 'Employee');
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          isOwner
+              ? tr(context, 'لوحة الإدارة', 'Management Dashboard')
+              : tr(context, 'لوحة الموظفين', 'Staff Dashboard'),
+        ),
+        actions: [
+          IconButton(
+            onPressed: () => _logout(context),
+            tooltip: tr(context, 'تسجيل الخروج', 'Log out'),
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          brandLogo(),
+          const SizedBox(height: 24),
+          Text(
+            tr(
+              context,
+              'مرحباً ${fullName.isEmpty ? roleName : fullName}',
+              'Welcome ${fullName.isEmpty ? roleName : fullName}',
+            ),
+            style: const TextStyle(
+              color: navy,
+              fontSize: 21,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: Chip(
+              avatar: Icon(
+                isOwner ? Icons.admin_panel_settings : Icons.badge,
+                color: navy,
+              ),
+              label: Text(roleName),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.verified_user, color: navy),
+              title: Text(
+                tr(context, 'تم تسجيل الدخول بنجاح', 'Successfully signed in'),
+              ),
+              subtitle: Text(
+                isOwner && permissions['all'] == true
+                    ? tr(
+                        context,
+                        'لديك صلاحيات الإدارة الكاملة.',
+                        'You have full management permissions.',
+                      )
+                    : tr(
+                        context,
+                        'سيتم عرض الأقسام حسب صلاحيات حسابك.',
+                        'Sections will be available according to your permissions.',
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            tr(context, 'الأقسام', 'Sections'),
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.bold,
+              color: navy,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.construction_outlined),
+              title: Text(tr(context, 'لوحة العمل', 'Work Dashboard')),
+              subtitle: Text(
+                tr(
+                  context,
+                  'سيتم ربط إدارة الحجوزات والموظفين والتقارير في الخطوات التالية.',
+                  'Bookings, staff management and reports will be connected in the next steps.',
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
