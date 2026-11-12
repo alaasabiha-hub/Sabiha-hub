@@ -164,8 +164,7 @@ def sync_normalized_records(client, payload: dict[str, Any], actor: str) -> None
     today = __import__("datetime").date.today().isoformat()
     for category, amount in (payload.get("daily_expenses") or {}).items():
         value = float(amount or 0)
-        if value > 0:
-            expense_rows.append(
+        expense_rows.append(
                 {
                     "expense_date": today,
                     "category": str(category),
@@ -253,4 +252,22 @@ def sync_normalized_records(client, payload: dict[str, Any], actor: str) -> None
     if closure_rows:
         client.table("business_daily_closures").upsert(
             closure_rows, on_conflict="closure_date"
+        ).execute()
+
+    settings = {
+        "commission_rate": payload.get("commission_rate", 0),
+        "services": payload.get("services") or {},
+        "products": payload.get("products") or {},
+    }
+    setting_rows = [
+        {
+            "setting_key": key,
+            "setting_value": value,
+            "updated_by": actor or "system",
+        }
+        for key, value in settings.items()
+    ]
+    if setting_rows:
+        client.table("business_settings").upsert(
+            setting_rows, on_conflict="setting_key"
         ).execute()
