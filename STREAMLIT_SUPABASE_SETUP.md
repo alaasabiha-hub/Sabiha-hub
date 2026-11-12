@@ -20,7 +20,16 @@ The app also records order-status notifications for the owner, provides a read-o
 
 ## First connection and existing data
 
-When Supabase is configured but the shared state row does not exist, the app imports the current local JSON file if it exists. Otherwise it starts with empty owner credentials and displays a first-owner setup screen; no public default password is shipped. Make and verify a JSON backup before switching a live installation. The app does not automatically overwrite an existing Supabase state row.
+When Supabase is configured but the shared state row does not exist, the app imports the current local JSON file if it exists. Otherwise it starts with empty owner credentials and displays a first-owner setup screen; no public default password is shipped. The app does not automatically overwrite an existing Supabase state row.
+
+Before switching the live app:
+1. Sign in to the current live app as owner.
+2. Open **Settings → Backup**, download the JSON backup, and keep a copy outside Streamlit.
+3. Configure all required Streamlit Secrets before merging/deploying.
+4. After the upgraded app starts and the first owner is set up, open **Settings → Backup**, upload the saved JSON, confirm the restore, and wait for the success message.
+5. Verify the invoice count, worker list, daily archive, and monthly archive before using the new app for live transactions.
+
+Legacy plaintext passwords in imported JSON backups are upgraded to salted PBKDF2 hashes before the restored data is saved to Supabase.
 
 Production startup now requires Supabase credentials. It will stop with a setup message instead of silently falling back to ephemeral local JSON storage. For isolated local development only, set `SABIHA_ALLOW_LOCAL_STORAGE=true` to explicitly enable the JSON fallback. Do not set this flag on Streamlit Cloud.
 
