@@ -510,18 +510,25 @@ def save_system_data():
                 sync_normalized_records(client, payload, actor)
             except Exception:
                 st.warning("تم حفظ البيانات الأساسية، لكن تعذّر تحديث بعض الجداول التفصيلية. سنعيد المحاولة مع الحفظ التالي.")
+            event = st.session_state.get("_pending_audit_event") or {}
             try:
                 append_audit_log(
                     client,
                     actor=actor,
-                    action="save_state",
-                    entity="business_app_state",
-                    entity_id="primary",
-                    details={"version": new_version},
+                    action=event.get("action", "save_state"),
+                    entity=event.get("entity", "business_app_state"),
+                    entity_id=event.get("entity_id", "primary"),
+                    details={
+                        "version": new_version,
+                        "invoice_count": len(get_all_invoices()),
+                        "order_count": len(payload.get("business_orders") or []),
+                        **(event.get("details") or {}),
+                    },
                 )
             except Exception:
-                # Audit logging must not falsely report a failed business save.
                 pass
+            finally:
+                st.session_state.pop("_pending_audit_event", None)
             return True
         except Exception as error:
             if "STATE_VERSION_CONFLICT" in str(error):
