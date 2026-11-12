@@ -1659,6 +1659,8 @@ elif page == "settings":
             "credentials": st.session_state.credentials,
             "workers": st.session_state.workers,
             "commission_rate": st.session_state.commission_rate,
+            "vat_rate_percent": st.session_state.get("vat_rate_percent", 14.0),
+            "vat_included_in_sales": st.session_state.get("vat_included_in_sales", False),
             "services": st.session_state.services,
             "products": st.session_state.products,
             "session_state_invoices": st.session_state.session_state_invoices,
