@@ -1396,6 +1396,177 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 }
 
+// تغيير كلمة مرور العميل
+class ChangePasswordScreen extends StatefulWidget {
+  const ChangePasswordScreen({super.key});
+
+  @override
+  State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
+}
+
+class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
+  final _currentPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _loading = false;
+  bool _hideCurrent = true;
+  bool _hideNew = true;
+  bool _hideConfirm = true;
+
+  @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _changePassword() async {
+    final currentPassword = _currentPasswordController.text;
+    final newPassword = _newPasswordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+    final user = supabase.auth.currentUser;
+    final email = user?.email;
+
+    if (currentPassword.isEmpty) {
+      showMessage(context, tr(context, 'أدخل كلمة المرور الحالية', 'Enter your current password'));
+      return;
+    }
+    if (email == null || email.isEmpty) {
+      showMessage(context, tr(context, 'تعذر تحديد بريد الحساب. سجّل الدخول مرة أخرى.', 'Could not identify your account email. Please sign in again.'));
+      return;
+    }
+    if (newPassword.length < 8 ||
+        !RegExp(r'[A-Za-z]').hasMatch(newPassword) ||
+        !RegExp(r'\d').hasMatch(newPassword)) {
+      showMessage(context, tr(context, 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل وتحتوي على حرف ورقم.', 'Use at least 8 characters, including a letter and a number.'));
+      return;
+    }
+    if (newPassword != confirmPassword) {
+      showMessage(context, tr(context, 'كلمتا المرور غير متطابقتين', 'Passwords do not match'));
+      return;
+    }
+    if (newPassword == currentPassword) {
+      showMessage(context, tr(context, 'اختر كلمة مرور مختلفة عن الحالية', 'Choose a password different from your current one'));
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      await supabase.auth.signInWithPassword(
+        email: email,
+        password: currentPassword,
+      );
+      await supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      if (!mounted) return;
+      showMessage(context, tr(context, 'تم تغيير كلمة المرور بنجاح', 'Your password has been changed successfully'));
+      Navigator.pop(context);
+    } on AuthException catch (e) {
+      if (mounted) {
+        final message = e.message.toLowerCase().contains('invalid login')
+            ? tr(context, 'كلمة المرور الحالية غير صحيحة', 'The current password is incorrect')
+            : e.message;
+        showMessage(context, message);
+      }
+    } catch (_) {
+      if (mounted) showMessage(context, tr(context, 'تعذر تغيير كلمة المرور. حاول مرة أخرى.', 'Could not change password. Please try again.'));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Widget _passwordField({
+    required TextEditingController controller,
+    required String arLabel,
+    required String enLabel,
+    required bool hidden,
+    required VoidCallback toggle,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: hidden,
+      textDirection: TextDirection.ltr,
+      textCapitalization: TextCapitalization.none,
+      autocorrect: false,
+      enableSuggestions: false,
+      decoration: InputDecoration(
+        labelText: tr(context, arLabel, enLabel),
+        prefixIcon: const Icon(Icons.lock_outline),
+        suffixIcon: IconButton(
+          onPressed: toggle,
+          icon: Icon(hidden ? Icons.visibility : Icons.visibility_off),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(tr(context, 'تغيير كلمة المرور', 'Change Password'))),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                tr(context, 'أدخل كلمة المرور الحالية ثم كلمة المرور الجديدة وأكدها.', 'Enter your current password, then your new password and confirmation.'),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              _passwordField(
+                controller: _currentPasswordController,
+                arLabel: 'كلمة المرور الحالية',
+                enLabel: 'Current password',
+                hidden: _hideCurrent,
+                toggle: () => setState(() => _hideCurrent = !_hideCurrent),
+              ),
+              const SizedBox(height: 16),
+              _passwordField(
+                controller: _newPasswordController,
+                arLabel: 'كلمة المرور الجديدة',
+                enLabel: 'New password',
+                hidden: _hideNew,
+                toggle: () => setState(() => _hideNew = !_hideNew),
+              ),
+              const SizedBox(height: 16),
+              _passwordField(
+                controller: _confirmPasswordController,
+                arLabel: 'تأكيد كلمة المرور الجديدة',
+                enLabel: 'Confirm new password',
+                hidden: _hideConfirm,
+                toggle: () => setState(() => _hideConfirm = !_hideConfirm),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                tr(context, 'يجب ألا تقل عن 8 أحرف وأن تحتوي على حرف ورقم.', 'At least 8 characters, with a letter and a number.'),
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _changePassword,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: navy,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: _loading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(tr(context, 'حفظ كلمة المرور', 'Save password')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // لوحة العميل
 class CustomerDashboardScreen extends StatelessWidget {
   final String customerName;
@@ -1532,12 +1703,10 @@ class CustomerDashboardScreen extends StatelessWidget {
                   'بيانات حساب العميل',
                   'Customer account details',
                 ),
-                onTap: () => showMessage(
+                onTap: () => Navigator.push(
                   context,
-                  tr(
-                    context,
-                    'سيتم تفعيل هذه الخدمة قريباً',
-                    'This feature will be enabled soon',
+                  MaterialPageRoute(
+                    builder: (_) => const ChangePasswordScreen(),
                   ),
                 ),
               ),
