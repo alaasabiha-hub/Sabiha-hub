@@ -2173,6 +2173,10 @@ elif page == "settings":
                         st.rerun()
         st.divider()
         st.subheader("إنشاء حساب موظف")
+        st.caption(
+            "لإظهار الطلبات المسندة للفني، اجعل اسم الموظف في الحساب مطابقاً "
+            "لاسمه في قائمة الفنيين وامنحه صلاحية متابعة الطلبات."
+        )
         n1, n2, n3 = st.columns(3)
         with n1:
             display = st.text_input("اسم الموظف الجديد", key="create_display")
