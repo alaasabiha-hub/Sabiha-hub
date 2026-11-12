@@ -795,6 +795,34 @@ def invoice_workers(invoice):
     return [name for name in names if name and name != "مبيعات مباشرة"]
 
 
+def worker_commission_invoices(worker_name):
+    """Collect a worker's invoices across the current day and all closed archives."""
+    result, seen = [], set()
+
+    def collect(invoice_buckets):
+        if not isinstance(invoice_buckets, dict):
+            return
+        for invoice_list in invoice_buckets.values():
+            for invoice in invoice_list or []:
+                if not isinstance(invoice, dict):
+                    continue
+                invoice_id = invoice.get("id")
+                if not invoice_id or invoice_id in seen:
+                    continue
+                if worker_name in invoice_workers(invoice):
+                    seen.add(invoice_id)
+                    result.append(invoice.copy())
+
+    collect(st.session_state.get("session_state_invoices", {}))
+    for record in st.session_state.get("daily_archive", {}).values():
+        collect(record.get("invoices", {}) if isinstance(record, dict) else {})
+    for month_records in st.session_state.get("monthly_archive", {}).values():
+        if isinstance(month_records, dict):
+            for record in month_records.values():
+                collect(record.get("invoices", {}) if isinstance(record, dict) else {})
+    return sorted(result, key=lambda item: item.get("time", ""))
+
+
 def printable_html(title, body):
     safe_title = html.escape(str(title))
     return f"""<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
@@ -1679,11 +1707,65 @@ elif page == "archive":
 # =============================================================================
 elif page == "commissions":
     st.markdown("## 💸 العمولات والسلفيات")
+    commission_report_rows = []
+    for worker in st.session_state.workers:
+        if not isinstance(worker, dict) or not worker.get("name"):
+            continue
+        worker_name = worker["name"]
+        worker_invoices = worker_commission_invoices(worker_name)
+        earned = sum(
+            float(inv.get("commission_share", 0))
+            for inv in worker_invoices
+            if inv.get("status", "Active") == "Active"
+        )
+        advance = float(worker.get("advance", 0))
+        commission_report_rows.append({
+            "الفني": worker_name,
+            "عدد الفواتير": sum(1 for inv in worker_invoices if inv.get("status", "Active") == "Active"),
+            "إجمالي العمولة": earned,
+            "السلف والمبالغ المصروفة": advance,
+            "المستحق الحالي": earned - advance,
+        })
+    if commission_report_rows:
+        commission_df = pd.DataFrame(commission_report_rows)
+        st.dataframe(commission_df, use_container_width=True, hide_index=True)
+        commission_buffer = BytesIO()
+        with pd.ExcelWriter(commission_buffer, engine="openpyxl") as writer:
+            commission_df.to_excel(writer, index=False, sheet_name="عمولات الفنيين")
+        st.download_button(
+            "📊 تحميل تقرير العمولات Excel",
+            data=commission_buffer.getvalue(),
+            file_name="sabiha_worker_commissions.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_worker_commissions_excel",
+        )
+        commission_pdf_rows = [[
+            "الفني", "عدد الفواتير", "العمولات", "السلف", "المستحق"
+        ]] + [[
+            str(row["الفني"]), str(row["عدد الفواتير"]),
+            f"{float(row['إجمالي العمولة']):.2f}",
+            f"{float(row['السلف والمبالغ المصروفة']):.2f}",
+            f"{float(row['المستحق الحالي']):.2f}",
+        ] for row in commission_report_rows]
+        commission_pdf = build_pdf(
+            "تقرير عمولات الفنيين - Sabiha Hub",
+            [f"عدد الفنيين: {len(commission_report_rows)}"],
+            commission_pdf_rows,
+        )
+        if commission_pdf:
+            st.download_button(
+                "📄 تحميل تقرير العمولات PDF",
+                data=commission_pdf,
+                file_name="sabiha_worker_commissions.pdf",
+                mime="application/pdf",
+                key="download_worker_commissions_pdf",
+            )
+    st.divider()
     for index, worker in enumerate(st.session_state.workers):
         if not isinstance(worker, dict) or not worker.get("name"):
             continue
         name = worker["name"]
-        worker_invoices = st.session_state.session_state_invoices.get(name, [])
+        worker_invoices = worker_commission_invoices(name)
         earned = sum(
             float(inv.get("commission_share", 0))
             for inv in worker_invoices
