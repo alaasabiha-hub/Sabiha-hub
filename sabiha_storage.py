@@ -202,3 +202,55 @@ def sync_normalized_records(client, payload: dict[str, Any], actor: str) -> None
         client.table("business_orders").upsert(
             order_rows, on_conflict="order_number"
         ).execute()
+
+
+    # Keep the owner and employee login hashes server-side in a queryable table.
+    credentials = payload.get("credentials") or {}
+    account_rows = []
+    owner = credentials.get("owner") or {}
+    if owner.get("username") and owner.get("password"):
+        account_rows.append(
+            {
+                "username": str(owner["username"]),
+                "display_name": "المالك",
+                "password_hash": str(owner["password"]),
+                "role": "owner",
+                "permissions": ["all"],
+                "is_active": True,
+            }
+        )
+    for username, account in (credentials.get("workers_accounts") or {}).items():
+        if not isinstance(account, dict) or not account.get("password"):
+            continue
+        account_rows.append(
+            {
+                "username": str(username),
+                "display_name": str(account.get("name") or username),
+                "password_hash": str(account["password"]),
+                "role": "worker",
+                "permissions": account.get("permissions") or [],
+                "is_active": True,
+            }
+        )
+    if account_rows:
+        client.table("business_staff_accounts").upsert(
+            account_rows, on_conflict="username"
+        ).execute()
+
+    # A closed day is unique by calendar date; the DB primary key prevents a
+    # second closure record for the same date.
+    closure_rows = []
+    for day_label, summary in (payload.get("daily_archive") or {}).items():
+        date_key = str(day_label)[:10]
+        if len(date_key) == 10:
+            closure_rows.append(
+                {
+                    "closure_date": date_key,
+                    "summary": summary or {},
+                    "closed_by": actor or "system",
+                }
+            )
+    if closure_rows:
+        client.table("business_daily_closures").upsert(
+            closure_rows, on_conflict="closure_date"
+        ).execute()
