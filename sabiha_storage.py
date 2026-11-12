@@ -107,3 +107,98 @@ def append_audit_log(
             "details": details or {},
         }
     ).execute()
+
+
+def sync_normalized_records(client, payload: dict[str, Any], actor: str) -> None:
+    """Mirror operational records into queryable tables after the state save."""
+    workers = payload.get("workers") or []
+    worker_rows = [
+        {
+            "name": str(item.get("name", "")).strip(),
+            "advance_balance": float(item.get("advance", 0) or 0),
+            "is_active": True,
+        }
+        for item in workers
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    ]
+    if worker_rows:
+        client.table("business_workers").upsert(
+            worker_rows, on_conflict="name"
+        ).execute()
+
+    seen: set[str] = set()
+    invoice_rows = []
+    for invoice_list in (payload.get("session_state_invoices") or {}).values():
+        for item in invoice_list or []:
+            if not isinstance(item, dict):
+                continue
+            invoice_id = str(item.get("id") or "").strip()
+            if not invoice_id or invoice_id in seen:
+                continue
+            seen.add(invoice_id)
+            raw_time = item.get("time")
+            invoice_rows.append(
+                {
+                    "invoice_id": invoice_id,
+                    "plate_number": item.get("plate_number"),
+                    "service_name": str(item.get("service") or "غير محدد"),
+                    "vehicle_type": item.get("car_type"),
+                    "total": float(item.get("total", 0) or 0),
+                    "discount": float(item.get("discount", 0) or 0),
+                    "sale_type": "product" if item.get("sale_type") == "product" else "service",
+                    "payment_method": item.get("payment"),
+                    "status": str(item.get("status", "Active")).lower(),
+                    "commission_total": float(item.get("commission_total", 0) or 0),
+                    "commission_share": float(item.get("commission_share", 0) or 0),
+                    "workers": item.get("workers") or item.get("commission_workers") or [],
+                    "issued_at": raw_time,
+                    "created_by": actor or "system",
+                }
+            )
+    if invoice_rows:
+        client.table("business_invoices").upsert(
+            invoice_rows, on_conflict="invoice_id"
+        ).execute()
+
+    expense_rows = []
+    today = __import__("datetime").date.today().isoformat()
+    for category, amount in (payload.get("daily_expenses") or {}).items():
+        value = float(amount or 0)
+        if value > 0:
+            expense_rows.append(
+                {
+                    "expense_date": today,
+                    "category": str(category),
+                    "amount": value,
+                    "created_by": actor or "system",
+                }
+            )
+    if expense_rows:
+        client.table("business_expenses").upsert(
+            expense_rows, on_conflict="expense_date,category"
+        ).execute()
+
+    orders = payload.get("business_orders") or []
+    order_rows = []
+    for order in orders:
+        if not isinstance(order, dict) or not order.get("order_number"):
+            continue
+        order_rows.append(
+            {
+                "order_number": str(order["order_number"]),
+                "customer_name": order.get("customer_name"),
+                "customer_phone": order.get("customer_phone"),
+                "plate_number": order.get("plate_number"),
+                "vehicle_type": order.get("vehicle_type"),
+                "service_name": str(order.get("service_name") or "غير محدد"),
+                "assigned_workers": order.get("assigned_workers") or [],
+                "status": str(order.get("status") or "received"),
+                "notes": order.get("notes"),
+                "created_by": order.get("created_by") or actor or "system",
+                "created_at": order.get("created_at"),
+            }
+        )
+    if order_rows:
+        client.table("business_orders").upsert(
+            order_rows, on_conflict="order_number"
+        ).execute()
