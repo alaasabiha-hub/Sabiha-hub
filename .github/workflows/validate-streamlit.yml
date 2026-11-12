@@ -36,3 +36,4 @@ jobs:
           done
           cat /tmp/sabiha-streamlit.log
           exit 1
+# CI validates the current Streamlit app and server-side storage adapter.
