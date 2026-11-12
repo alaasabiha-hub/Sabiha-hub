@@ -2154,6 +2154,10 @@ elif page == "settings":
         if st.button("استعادة النسخة الاحتياطية", disabled=not (uploaded_backup and confirm_restore)):
             try:
                 imported = json.load(uploaded_backup)
+                if not isinstance(imported, dict):
+                    raise ValueError("يجب أن يحتوي ملف النسخة الاحتياطية على كائن JSON.")
+                if "credentials" in imported and not isinstance(imported["credentials"], dict):
+                    raise ValueError("قسم الحسابات في النسخة الاحتياطية غير صالح.")
                 merged = deep_merge(default_data(), imported)
                 for key in [
                     "credentials", "workers", "commission_rate", "vat_rate_percent",
@@ -2168,8 +2172,8 @@ elif page == "settings":
                 if save_system_data():
                     st.success("تمت استعادة النسخة الاحتياطية وتأمين كلمات المرور.")
                     st.rerun()
-            except (json.JSONDecodeError, TypeError, KeyError) as error:
-                st.error(f"ملف النسخة الاحتياطية غير صالح: {error}")
+            except (json.JSONDecodeError, TypeError, KeyError, ValueError) as error:
+                st.error(f"ملف النسخة الاحتياطية غير صالح أو تعذر حفظه: {error}")
 
 
 # =============================================================================
