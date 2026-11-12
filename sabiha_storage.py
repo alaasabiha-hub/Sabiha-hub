@@ -273,3 +273,21 @@ def sync_normalized_records(client, payload: dict[str, Any], actor: str) -> None
         client.table("business_settings").upsert(
             setting_rows, on_conflict="setting_key"
         ).execute()
+
+
+def append_business_notification(
+    client,
+    order_number: str,
+    message: str,
+    status: str,
+    actor: str,
+) -> None:
+    client.table("business_notifications").insert(
+        {
+            "order_number": order_number,
+            "message": message,
+            "status": status,
+            "actor": actor or "system",
+            "is_read": False,
+        }
+    ).execute()
