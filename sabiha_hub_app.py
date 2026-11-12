@@ -1679,7 +1679,8 @@ elif page == "settings":
                 imported = json.load(uploaded_backup)
                 merged = deep_merge(default_data(), imported)
                 for key in [
-                    "credentials", "workers", "commission_rate", "services", "products",
+                    "credentials", "workers", "commission_rate", "vat_rate_percent",
+                    "vat_included_in_sales", "services", "products",
                     "session_state_invoices", "business_orders", "daily_sales", "daily_expenses",
                     "daily_archive", "monthly_archive",
                 ]:
