@@ -569,6 +569,19 @@ def save_system_data():
         return False
 
 
+# Production must use shared Supabase storage. Local JSON is allowed only
+# when explicitly enabled for isolated development/testing.
+if (
+    get_supabase_client() is None
+    and os.getenv("SABIHA_ALLOW_LOCAL_STORAGE", "").strip().lower()
+    not in {"1", "true", "yes"}
+):
+    st.error(
+        "يلزم ربط Supabase قبل تشغيل النظام. أضف رابط المشروع ومفتاح "
+        "Service Role داخل Streamlit Secrets. لا تضع المفتاح في GitHub أو داخل الكود."
+    )
+    st.stop()
+
 if "system_loaded" not in st.session_state:
     persisted = load_system_data()
     for key, value in persisted.items():
@@ -682,6 +695,8 @@ if st.sidebar.button("تسجيل الخروج 🔓", use_container_width=True):
     st.rerun()
 
 if st.sidebar.button("🔄 تحديث البيانات", use_container_width=True):
+    # Force a fresh read from Supabase instead of rerunning with stale session state.
+    st.session_state["system_loaded"] = False
     st.rerun()
 
 PAGES = [
