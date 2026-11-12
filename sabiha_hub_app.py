@@ -617,16 +617,38 @@ for key, default in {
 if not st.session_state.logged_in:
     owner_setup = st.session_state.credentials.get("owner", {})
     if not owner_setup.get("username") or not owner_setup.get("password"):
+        bootstrap_config = {}
+        try:
+            bootstrap_config = st.secrets.get("bootstrap", {})
+        except Exception:
+            pass
+        expected_setup_token = (
+            os.environ.get("SABIHA_OWNER_SETUP_TOKEN", "").strip()
+            or str(bootstrap_config.get("owner_setup_token", "")).strip()
+        )
         st.markdown(
             "<h1 style='text-align:center;color:#173b63'>✨ إعداد Sabiha Hub لأول مرة</h1>",
             unsafe_allow_html=True,
         )
-        st.info("أنشئ حساب المالك الأول. لم نعد نضع كلمات مرور افتراضية معروفة داخل الكود.")
+        if not expected_setup_token:
+            st.error(
+                "إعداد حساب المالك الأول مقفول للحماية. أضف bootstrap.owner_setup_token "
+                "في Streamlit Secrets ثم أعد تشغيل التطبيق."
+            )
+            st.stop()
+        st.info("أنشئ حساب المالك الأول باستخدام رمز التهيئة السري. لا تشارك الرمز مع الموظفين.")
+        setup_token = st.text_input(
+            "رمز التهيئة السري",
+            type="password",
+            key="first_owner_setup_token",
+        )
         setup_username = st.text_input("اسم مستخدم المالك", key="first_owner_username").strip()
         setup_password = st.text_input("كلمة مرور المالك", type="password", key="first_owner_password")
         setup_confirm = st.text_input("تأكيد كلمة المرور", type="password", key="first_owner_confirm")
         if st.button("إنشاء حساب المالك الآمن", type="primary", use_container_width=True):
-            if not setup_username or len(setup_password) < 12 or not any(c.isalpha() for c in setup_password) or not any(c.isdigit() for c in setup_password):
+            if not hmac.compare_digest(setup_token, expected_setup_token):
+                st.error("رمز التهيئة السري غير صحيح.")
+            elif not setup_username or len(setup_password) < 12 or not any(c.isalpha() for c in setup_password) or not any(c.isdigit() for c in setup_password):
                 st.error("استخدم اسم مستخدم وكلمة مرور لا تقل عن 12 حرفاً وتحتوي على حروف وأرقام.")
             elif setup_password != setup_confirm:
                 st.error("تأكيد كلمة المرور غير مطابق.")
