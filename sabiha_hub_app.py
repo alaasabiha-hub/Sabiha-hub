@@ -925,6 +925,12 @@ def show_invoice_card(inv, prefix, index, allow_refund=True):
                             "refund_reason": reason.strip(),
                             "cancelled_by": cancelled_by,
                         })
+                        st.session_state["_pending_audit_event"] = {
+                            "action": "invoice_refunded",
+                            "entity": "business_invoices",
+                            "entity_id": inv["id"],
+                            "details": {"reason": reason.strip(), "cancelled_by": cancelled_by},
+                        }
                         save_system_data()
                         st.success("تم تسجيل الإرجاع.")
                         st.rerun()
@@ -1192,6 +1198,7 @@ elif page == "pos":
             invoice_buckets = assigned if assigned else ["مبيعات مباشرة"]
             for worker_name in invoice_buckets:
                 st.session_state.session_state_invoices.setdefault(worker_name, []).append(inv.copy())
+            order_number = None
             if not is_product:
                 order_number = f"ORD-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
                 st.session_state.setdefault("business_orders", []).append({
@@ -1205,6 +1212,18 @@ elif page == "pos":
                     "created_by": st.session_state.get("current_user") or "system",
                     "created_at": now.isoformat(timespec="seconds"),
                 })
+            st.session_state["_pending_audit_event"] = {
+                "action": "invoice_issued",
+                "entity": "business_invoices",
+                "entity_id": invoice_id,
+                "details": {
+                    "order_number": order_number,
+                    "total": final_total,
+                    "plate_number": plate if not is_product else None,
+                    "sale_type": "product" if is_product else "service",
+                    "workers": assigned,
+                },
+            }
             if save_system_data():
                 st.success(f"تم إصدار الفاتورة بنجاح: {invoice_id}")
                 st.balloons()
@@ -1278,8 +1297,15 @@ elif page == "orders":
                     key=f"order_status_{order_number}",
                 )
                 if st.button("حفظ حالة الطلب", key=f"save_order_{order_number}"):
+                    previous_status = order.get("status", "received")
                     order["status"] = selected_status
                     order["updated_at"] = dt.datetime.now().astimezone().isoformat(timespec="seconds")
+                    st.session_state["_pending_audit_event"] = {
+                        "action": "order_status_changed",
+                        "entity": "business_orders",
+                        "entity_id": order_number,
+                        "details": {"from": previous_status, "to": selected_status},
+                    }
                     if save_system_data():
                         st.success("تم تحديث حالة الطلب وتسجيل العملية.")
                         st.rerun()
