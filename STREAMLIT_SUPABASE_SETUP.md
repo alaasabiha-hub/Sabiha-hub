@@ -25,3 +25,7 @@ When Supabase is configured but the shared state row does not exist, the app imp
 ## Deployment
 
 This branch is not the Streamlit production branch. Review and test it before merging into `main`. The current live Streamlit app URL remains `https://sabiha-auto.streamlit.app`.
+
+## Remaining Supabase Auth hardening
+
+The Supabase security advisor still reports leaked-password protection as disabled for Supabase Auth users (including the separate Flutter app). Enable it in Supabase Dashboard under Authentication security/password protection. This setting is not controlled by the Streamlit service-role integration.
