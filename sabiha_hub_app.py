@@ -520,7 +520,12 @@ def save_system_data():
                     entity_id=event.get("entity_id", "primary"),
                     details={
                         "version": new_version,
-                        "invoice_count": len(get_all_invoices()),
+                        "invoice_count": len({
+                            str(item.get("id"))
+                            for group in (payload.get("session_state_invoices") or {}).values()
+                            for item in (group or [])
+                            if isinstance(item, dict) and item.get("id")
+                        }),
                         "order_count": len(payload.get("business_orders") or []),
                         **(event.get("details") or {}),
                     },
