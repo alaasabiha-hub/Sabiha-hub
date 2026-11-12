@@ -961,10 +961,12 @@ def render_dashboard():
     current_sales = sum(float(x.get("total", 0)) for x in current_active)
     current_commissions = sum(float(x.get("commission_total", 0)) for x in current_active)
     current_expenses = sum(float(v) for v in st.session_state.daily_expenses.values())
+    current_vat_rate = float(st.session_state.get("vat_rate_percent", 14.0))
+    current_vat_included = bool(st.session_state.get("vat_included_in_sales", False))
     current_vat = (
-        current_sales * vat_rate / (100.0 + vat_rate)
-        if vat_included
-        else current_sales * vat_rate / 100.0
+        current_sales * current_vat_rate / (100.0 + current_vat_rate)
+        if current_vat_included
+        else current_sales * current_vat_rate / 100.0
     )
     current_net = current_sales - current_expenses - current_vat - current_commissions
     st.session_state.daily_sales = current_sales
@@ -978,7 +980,7 @@ def render_dashboard():
     a, b, c, d = st.columns(4)
     a.metric("💰 المبيعات المحصلة", f"{current_sales:,.2f} ج.م", f"{len(current_active)} فاتورة")
     b.metric("📉 مصروفات اليوم", f"{current_expenses:,.2f} ج.م")
-    c.metric(f"🏛️ ضريبة {vat_rate:g}% تقديرية", f"{current_vat:,.2f} ج.م")
+    c.metric(f"🏛️ ضريبة {current_vat_rate:g}% تقديرية", f"{current_vat:,.2f} ج.م")
     d.metric("🚗 سيارات مخدومة", len(current_services))
     active_orders = [o for o in st.session_state.get("business_orders", []) if o.get("status") not in ("delivered", "cancelled")]
     e, f, g = st.columns(3)
@@ -986,8 +988,8 @@ def render_dashboard():
     f.metric("🟩 صافي تقديري", f"{current_net:,.2f} ج.م")
     g.metric("↩️ إجمالي المرتجعات", f"{sum(float(x.get('total',0)) for x in current_refunded):,.2f} ج.م")
     st.metric("🚘 الطلبات المفتوحة", len(active_orders))
-    tax_mode = "مضمنة داخل إجمالي المبيعات" if vat_included else "تُضاف على المبيعات قبل الضريبة"
-    st.info(f"طريقة التقدير الحالية: {vat_rate:g}%، والضريبة {tax_mode}. راجع النسبة وطريقة التطبيق مع المحاسب وفق بلد النشاط.")
+    tax_mode = "مضمنة داخل إجمالي المبيعات" if current_vat_included else "تُضاف على المبيعات قبل الضريبة"
+    st.info(f"طريقة التقدير الحالية: {current_vat_rate:g}%، والضريبة {tax_mode}. راجع النسبة وطريقة التطبيق مع المحاسب وفق بلد النشاط.")
     st.divider()
     st.subheader("📥 تقرير اليوم")
     df = invoice_dataframe(current_invoices)
@@ -1217,6 +1219,7 @@ elif page == "orders":
         if not st.session_state.get("_storage_error", False):
             for key in (
                 "credentials", "workers", "commission_rate", "services", "products",
+                "vat_rate_percent", "vat_included_in_sales",
                 "session_state_invoices", "business_orders", "daily_sales",
                 "daily_expenses", "daily_archive", "monthly_archive",
             ):
