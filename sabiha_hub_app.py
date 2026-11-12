@@ -29,6 +29,13 @@ import hashlib
 import hmac
 import secrets
 from copy import deepcopy
+from sabiha_storage import (
+    get_supabase_client,
+    load_business_state,
+    save_business_state,
+    append_audit_log,
+    StateVersionConflict,
+)
 
 # =============================================================================
 # Sabiha Hub - Streamlit application
@@ -427,23 +434,48 @@ def deep_merge(defaults, saved):
 
 def load_system_data():
     defaults = default_data()
-    if not os.path.exists(DATA_FILE):
-        return defaults
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as file:
-            saved = json.load(file)
-        data = deep_merge(defaults, saved)
-        # Normalize fields that older versions may not have contained.
-        data.setdefault("credentials", defaults["credentials"])
-        data["credentials"].setdefault("owner", defaults["credentials"]["owner"])
-        data["credentials"].setdefault("workers_accounts", {})
-        data.setdefault("workers", [])
-        data.setdefault("session_state_invoices", {})
-        data.setdefault("daily_expenses", defaults["daily_expenses"])
-        return data
-    except (OSError, json.JSONDecodeError, TypeError):
-        st.error("تعذر قراءة ملف البيانات الحالي. لم يتم استبداله حتى لا نفقد البيانات.")
-        return defaults
+    client = get_supabase_client()
+    if client is not None:
+        try:
+            saved, version = load_business_state(client)
+            st.session_state["_supabase_state_version"] = version
+            st.session_state["_storage_error"] = False
+            if saved is not None:
+                data = deep_merge(defaults, saved)
+            else:
+                # First connection: preserve an existing local JSON file if one exists.
+                if os.path.exists(DATA_FILE):
+                    with open(DATA_FILE, "r", encoding="utf-8") as file:
+                        data = deep_merge(defaults, json.load(file))
+                else:
+                    data = defaults
+        except Exception as error:
+            st.session_state["_storage_error"] = True
+            st.error(
+                "تعذر الاتصال بقاعدة البيانات المشتركة. أوقفنا الحفظ مؤقتاً "
+                "حتى لا يتم استبدال بيانات أحدث بنسخة قديمة."
+            )
+            return defaults
+    else:
+        st.session_state["_supabase_state_version"] = 0
+        st.session_state["_storage_error"] = False
+        if not os.path.exists(DATA_FILE):
+            return defaults
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as file:
+                data = deep_merge(defaults, json.load(file))
+        except (OSError, json.JSONDecodeError, TypeError):
+            st.error("تعذر قراءة ملف البيانات الحالي. لم يتم استبداله حتى لا نفقد البيانات.")
+            return defaults
+
+    # Normalize fields that older versions may not have contained.
+    data.setdefault("credentials", defaults["credentials"])
+    data["credentials"].setdefault("owner", defaults["credentials"]["owner"])
+    data["credentials"].setdefault("workers_accounts", {})
+    data.setdefault("workers", [])
+    data.setdefault("session_state_invoices", {})
+    data.setdefault("daily_expenses", defaults["daily_expenses"])
+    return data
 
 
 def save_system_data():
@@ -459,6 +491,41 @@ def save_system_data():
         "daily_archive": st.session_state.daily_archive,
         "monthly_archive": st.session_state.monthly_archive,
     }
+    client = get_supabase_client()
+    if client is not None:
+        if st.session_state.get("_storage_error", False):
+            st.error("الحفظ متوقف بسبب مشكلة اتصال سابقة. حدّث الصفحة قبل المحاولة.")
+            return False
+        try:
+            actor = str(st.session_state.get("current_user") or "system")
+            expected_version = int(st.session_state.get("_supabase_state_version", 0))
+            new_version = save_business_state(
+                client, payload, expected_version, actor
+            )
+            st.session_state["_supabase_state_version"] = new_version
+            try:
+                append_audit_log(
+                    client,
+                    actor=actor,
+                    action="save_state",
+                    entity="business_app_state",
+                    entity_id="primary",
+                    details={"version": new_version},
+                )
+            except Exception:
+                # Audit logging must not falsely report a failed business save.
+                pass
+            return True
+        except Exception as error:
+            if "STATE_VERSION_CONFLICT" in str(error):
+                st.error(
+                    "فيه مستخدم تاني حفظ بيانات أحدث. لم نكتب فوقها؛ "
+                    "حدّث الصفحة وحاول مرة تانية."
+                )
+            else:
+                st.error("تعذر حفظ البيانات في Supabase. لم نستخدم نسخة محلية بديلة.")
+            return False
+
     temp_file = DATA_FILE + ".tmp"
     try:
         with open(temp_file, "w", encoding="utf-8") as file:
@@ -540,6 +607,10 @@ if not st.session_state.logged_in:
 # =============================================================================
 st.sidebar.markdown(f"### 👋 مرحباً: {st.session_state.current_user}")
 st.sidebar.caption(f"نوع الحساب: {st.session_state.user_role}")
+if get_supabase_client() is not None:
+    st.sidebar.success("قاعدة البيانات المشتركة: Supabase")
+else:
+    st.sidebar.warning("التخزين الحالي: ملف JSON محلي")
 st.sidebar.write("---")
 
 if st.sidebar.button("تسجيل الخروج 🔓", use_container_width=True):
@@ -826,6 +897,7 @@ st.session_state.daily_sales = sales_today
 # =============================================================================
 # Dashboard
 # =============================================================================
+@st.fragment(run_every="5s")
 def render_dashboard():
     # Read the latest shared JSON data on every dashboard refresh. This lets the
     # owner's dashboard see invoices created by another logged-in worker session.
