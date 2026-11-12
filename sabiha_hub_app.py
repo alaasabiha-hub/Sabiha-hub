@@ -628,7 +628,7 @@ if not st.session_state.logged_in:
                     st.rerun()
                 else:
                     st.error("بيانات الدخول غير صحيحة. راجع اسم المستخدم وكلمة المرور.")
-        st.caption("لو دي أول مرة تشغّل النظام، راجع بيانات الدخول الافتراضية في إعدادات النشر وغيّرها فورًا.")
+        st.caption("بيانات الدخول لا تُعرض داخل النظام، وكلمات المرور محفوظة بتجزئة آمنة.")
     st.stop()
 
 
@@ -934,6 +934,9 @@ def render_dashboard():
     # Read the latest shared JSON data on every dashboard refresh. This lets the
     # owner's dashboard see invoices created by another logged-in worker session.
     latest = load_system_data()
+    if st.session_state.get("_storage_error", False):
+        st.warning("تعذر تحديث البيانات من Supabase حالياً. لم نكتب فوق البيانات المحفوظة.")
+        return
     for key in (
         "session_state_invoices", "daily_expenses", "daily_archive",
         "monthly_archive", "workers", "commission_rate", "services", "products",
