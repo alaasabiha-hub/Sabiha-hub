@@ -1,7 +1,8 @@
 """Compatibility entry point for Streamlit Cloud.
 
 The full, maintained Streamlit application lives in sabiha_hub_app.py.
-Keeping app.py as a thin launcher ensures deployments configured with the
-default Streamlit file path run the secure Supabase-backed application.
+Use runpy so Streamlit reruns execute the app module on every interaction.
 """
-import sabiha_hub_app  # noqa: F401
+import runpy
+
+runpy.run_path("sabiha_hub_app.py", run_name="__main__")
