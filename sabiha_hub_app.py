@@ -2165,10 +2165,9 @@ elif page == "settings":
                 # Legacy JSON backups may contain plaintext passwords; hash them
                 # before the restored state is written to Supabase.
                 migrate_plaintext_passwords(st.session_state.credentials)
-                if not save_system_data():
-                    raise RuntimeError("تعذر حفظ النسخة المستعادة في Supabase.")
-                st.success("تمت استعادة النسخة الاحتياطية وتأمين كلمات المرور.")
-                st.rerun()
+                if save_system_data():
+                    st.success("تمت استعادة النسخة الاحتياطية وتأمين كلمات المرور.")
+                    st.rerun()
             except (json.JSONDecodeError, TypeError, KeyError) as error:
                 st.error(f"ملف النسخة الاحتياطية غير صالح: {error}")
 
