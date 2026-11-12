@@ -387,15 +387,8 @@ st.markdown("""
 def default_data():
     return {
         "credentials": {
-            "owner": {"username": "owner", "password": "sabiha2026"},
-            "workers_accounts": {
-                "worker1": {
-                    "name": "كاشير الاستقبال",
-                    "password": "pos123",
-                    "role": "worker",
-                    "permissions": ["🛒 كاشير الاستقبال POS", "🚗 متابعة الطلبات", "📑 دفتر المصروفات"],
-                }
-            },
+            "owner": {"username": "", "password": ""},
+            "workers_accounts": {},
         },
         "workers": [
             {"name": "أحمد مصطفى", "advance": 0.0},
@@ -577,6 +570,31 @@ for key, default in {
         st.session_state[key] = default
 
 if not st.session_state.logged_in:
+    owner_setup = st.session_state.credentials.get("owner", {})
+    if not owner_setup.get("username") or not owner_setup.get("password"):
+        st.markdown(
+            "<h1 style='text-align:center;color:#173b63'>✨ إعداد Sabiha Hub لأول مرة</h1>",
+            unsafe_allow_html=True,
+        )
+        st.info("أنشئ حساب المالك الأول. لم نعد نضع كلمات مرور افتراضية معروفة داخل الكود.")
+        setup_username = st.text_input("اسم مستخدم المالك", key="first_owner_username").strip()
+        setup_password = st.text_input("كلمة مرور المالك", type="password", key="first_owner_password")
+        setup_confirm = st.text_input("تأكيد كلمة المرور", type="password", key="first_owner_confirm")
+        if st.button("إنشاء حساب المالك الآمن", type="primary", use_container_width=True):
+            if not setup_username or len(setup_password) < 12 or not any(c.isalpha() for c in setup_password) or not any(c.isdigit() for c in setup_password):
+                st.error("استخدم اسم مستخدم وكلمة مرور لا تقل عن 12 حرفاً وتحتوي على حروف وأرقام.")
+            elif setup_password != setup_confirm:
+                st.error("تأكيد كلمة المرور غير مطابق.")
+            else:
+                st.session_state.credentials["owner"] = {
+                    "username": setup_username,
+                    "password": hash_password(setup_password),
+                }
+                if save_system_data():
+                    st.success("تم إنشاء حساب المالك. سجّل الدخول الآن.")
+                    st.rerun()
+        st.stop()
+
     st.markdown(
         "<h1 style='text-align:center;color:#173b63'>✨ Sabiha Hub | تسجيل الدخول</h1>",
         unsafe_allow_html=True,
