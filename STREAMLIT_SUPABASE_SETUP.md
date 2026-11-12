@@ -6,7 +6,7 @@ Add this in Streamlit Cloud > app > Settings > Secrets:
 
 ```toml
 [supabase]
-url = "https://YOUR_PROJECT_REF.supabase.co"
+url = "https://cujfeqsuanwxobtupxaz.supabase.co"
 service_role_key = "YOUR_SERVICE_ROLE_KEY"
 ```
 
