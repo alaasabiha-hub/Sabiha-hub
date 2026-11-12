@@ -946,6 +946,19 @@ def excel_report_bytes(invoices, summary_rows=None, archive_rows=None):
     return buffer.getvalue()
 
 
+def archive_excel_bytes(daily_rows, monthly_rows):
+    """Build an Excel workbook with daily and monthly archive summaries."""
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        pd.DataFrame(daily_rows).to_excel(
+            writer, index=False, sheet_name="أرشيف الأيام"
+        )
+        pd.DataFrame(monthly_rows).to_excel(
+            writer, index=False, sheet_name="ملخص الشهور"
+        )
+    return buffer.getvalue()
+
+
 def show_invoice_card(inv, prefix, index, allow_refund=True):
     status = inv.get("status", "Active")
     with st.container(border=True):
@@ -1511,6 +1524,48 @@ elif page == "orders":
 # =============================================================================
 elif page == "archive":
     st.markdown("## 📉 تقرير الحسابات والأرشيف")
+    monthly_totals = {}
+    for month, records in st.session_state.monthly_archive.items():
+        totals = monthly_totals.setdefault(month, {
+            "المبيعات": 0.0, "المصروفات": 0.0, "الضريبة": 0.0,
+            "العمولات": 0.0, "عدد السيارات": 0, "الصافي": 0.0,
+        })
+        for record in records.values():
+            totals["المبيعات"] += float(record.get("sales", 0) or 0)
+            totals["المصروفات"] += float(record.get("expenses", 0) or 0)
+            totals["الضريبة"] += float(record.get("tax", 0) or 0)
+            totals["العمولات"] += float(record.get("commissions", 0) or 0)
+            totals["عدد السيارات"] += int(record.get("cars_count", 0) or 0)
+            totals["الصافي"] += float(record.get("net", 0) or 0)
+    for day, record in st.session_state.daily_archive.items():
+        month = str(day)[:7]
+        totals = monthly_totals.setdefault(month, {
+            "المبيعات": 0.0, "المصروفات": 0.0, "الضريبة": 0.0,
+            "العمولات": 0.0, "عدد السيارات": 0, "الصافي": 0.0,
+        })
+        totals["المبيعات"] += float(record.get("sales", 0) or 0)
+        totals["المصروفات"] += float(record.get("expenses", 0) or 0)
+        totals["الضريبة"] += float(record.get("tax", 0) or 0)
+        totals["العمولات"] += float(record.get("commissions", 0) or 0)
+        totals["عدد السيارات"] += int(record.get("cars_count", 0) or 0)
+        totals["الصافي"] += float(record.get("net", 0) or 0)
+    current_month = dt.datetime.now().strftime("%Y-%m")
+    if sales_today or expenses_today:
+        totals = monthly_totals.setdefault(current_month, {
+            "المبيعات": 0.0, "المصروفات": 0.0, "الضريبة": 0.0,
+            "العمولات": 0.0, "عدد السيارات": 0, "الصافي": 0.0,
+        })
+        totals["المبيعات"] += sales_today
+        totals["المصروفات"] += expenses_today
+        totals["الضريبة"] += vat_today
+        totals["العمولات"] += commissions_today
+        totals["عدد السيارات"] += len(service_invoices)
+        totals["الصافي"] += net_today
+    monthly_summary_rows = [
+        {"الشهر": month, **totals}
+        for month, totals in sorted(monthly_totals.items())
+    ]
+
     tab_days, tab_months = st.tabs(["📁 أرشيف الأيام", "🗄️ الأرشيف الشهري"])
     with tab_days:
         if st.session_state.daily_archive:
@@ -1520,12 +1575,16 @@ elif page == "archive":
         else:
             st.info("لا يوجد أرشيف أيام مغلقة.")
     with tab_months:
-        if st.session_state.monthly_archive:
-            for month, records in st.session_state.monthly_archive.items():
-                with st.expander(f"أرشيف شهر {month}"):
-                    st.json(records)
+        if monthly_summary_rows:
+            monthly_df = pd.DataFrame(monthly_summary_rows)
+            st.dataframe(monthly_df, use_container_width=True, hide_index=True)
+            st.bar_chart(monthly_df.set_index("الشهر")[["المبيعات", "الصافي"]])
         else:
             st.info("لا يوجد أرشيف شهري.")
+        for month, records in st.session_state.monthly_archive.items():
+            with st.expander(f"تفاصيل أرشيف شهر {month}"):
+                st.json(records)
+
     st.divider()
     st.subheader("تنزيل كشف الأرشيف")
     archive_rows = []
@@ -1567,8 +1626,17 @@ elif page == "archive":
                 mime="application/pdf",
                 key="download_archive_report_pdf",
             )
+    if archive_rows or monthly_summary_rows:
+        archive_excel = archive_excel_bytes(archive_rows, monthly_summary_rows)
+        st.download_button(
+            "📊 تحميل الأرشيف اليومي والشهري Excel",
+            data=archive_excel,
+            file_name="sabiha_archive_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_archive_report_excel",
+        )
     else:
-        st.caption("لا توجد سجلات يومية قابلة للتنزيل حالياً.")
+        st.caption("لا توجد سجلات قابلة للتنزيل حالياً.")
 
 
 # =============================================================================
