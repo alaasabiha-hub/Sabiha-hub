@@ -1076,6 +1076,12 @@ def render_dashboard():
                     st.session_state.session_state_invoices = {}
                     st.session_state.daily_sales = 0.0
                     st.session_state.daily_expenses = {"rent": 0.0, "operational": 0.0, "utilities": 0.0}
+                    st.session_state["_pending_audit_event"] = {
+                        "action": "daily_closure_created",
+                        "entity": "business_daily_closures",
+                        "entity_id": today_key[:10],
+                        "details": {"sales": current_sales, "expenses": current_expenses, "net": current_net},
+                    }
                     save_system_data()
                     st.success("تم إغلاق اليوم وترحيله.")
                     st.rerun()
@@ -1444,6 +1450,12 @@ elif page == "expenses":
             "rent": rent,
             "operational": operational,
             "utilities": utilities,
+        }
+        st.session_state["_pending_audit_event"] = {
+            "action": "expenses_updated",
+            "entity": "business_expenses",
+            "entity_id": dt.date.today().isoformat(),
+            "details": {"total": rent + operational + utilities},
         }
         save_system_data()
         st.success("تم حفظ المصروفات.")
