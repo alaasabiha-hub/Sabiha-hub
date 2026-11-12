@@ -1862,6 +1862,7 @@ elif page == "ai":
             key="ai_business_question",
         )
         if st.button("✨ تحليل البيانات بالذكاء الاصطناعي", type="primary"):
+            st.session_state["ai_business_last_answer"] = ""
             service_mix = {}
             payment_mix = {}
             for invoice in active_invoices:
@@ -1912,7 +1913,7 @@ elif page == "ai":
             with st.spinner("المساعد الذكي بيحلل مؤشرات التشغيل..."):
                 try:
                     answer = analyze_business(
-                        api_key, ai_model, snapshot, ai_question
+                        api_key, ai_model, snapshot, ai_question[:2000]
                     )
                     st.session_state["ai_business_last_answer"] = answer
                     try:
