@@ -30,6 +30,8 @@ The sidebar's refresh action forces a new read from Supabase. The dashboard and 
 
 This branch is not the Streamlit production branch. Review and test it before merging into `main`. The current live Streamlit app URL remains `https://sabiha-auto.streamlit.app`.
 
+For Streamlit Cloud, set the main file path to `app.py` (the compatibility entry point that launches `sabiha_hub_app.py` on every rerun). You may also point Streamlit directly to `sabiha_hub_app.py`.
+
 ## Remaining Supabase Auth hardening
 
 The Supabase security advisor still reports leaked-password protection as disabled for Supabase Auth users (including the separate Flutter app). Enable it in Supabase Dashboard under Authentication security/password protection. This setting is not controlled by the Streamlit service-role integration.
