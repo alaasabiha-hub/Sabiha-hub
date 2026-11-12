@@ -33,3 +33,7 @@ This branch is not the Streamlit production branch. Review and test it before me
 ## Remaining Supabase Auth hardening
 
 The Supabase security advisor still reports leaked-password protection as disabled for Supabase Auth users (including the separate Flutter app). Enable it in Supabase Dashboard under Authentication security/password protection. This setting is not controlled by the Streamlit service-role integration.
+
+## Optional AI business advisor
+
+The owner-only `🧠 مساعد Sabiha الذكي` page uses the OpenAI Responses API. Add an API key under the `[openai]` section in Streamlit Cloud Secrets (see `STREAMLIT_SECRETS.example.toml`). The model defaults to `gpt-6-luna` and can be changed with the `model` setting. The assistant runs only when the owner clicks its analyze button; it does not run automatically. It receives aggregate business figures only—customer names, phone numbers, emails, and license plates are not sent. OpenAI API usage is billed separately from ChatGPT subscriptions; review current rates at https://platform.openai.com/pricing/.
