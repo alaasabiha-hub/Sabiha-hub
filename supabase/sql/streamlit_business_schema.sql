@@ -182,3 +182,18 @@ REVOKE ALL ON FUNCTION public.save_business_app_state(jsonb, bigint, text)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.save_business_app_state(jsonb, bigint, text)
   TO service_role;
+
+CREATE TABLE IF NOT EXISTS public.business_notifications (
+  notification_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_number text NOT NULL,
+  message text NOT NULL,
+  status text,
+  actor text NOT NULL,
+  is_read boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.business_notifications ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.business_notifications FROM anon, authenticated;
+GRANT ALL ON public.business_notifications TO service_role;
+CREATE INDEX IF NOT EXISTS business_notifications_unread_created_idx
+  ON public.business_notifications(is_read, created_at DESC);
