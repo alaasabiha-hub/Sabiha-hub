@@ -35,6 +35,7 @@ from sabiha_storage import (
     save_business_state,
     append_audit_log,
     StateVersionConflict,
+    sync_normalized_records,
 )
 
 # =============================================================================
@@ -412,6 +413,7 @@ def default_data():
             "سائل ممسحة زجاج": 40.0,
         },
         "session_state_invoices": {},
+        "business_orders": [],
         "daily_sales": 0.0,
         "daily_expenses": {"rent": 0.0, "operational": 0.0, "utilities": 0.0},
         "daily_archive": {},
@@ -474,6 +476,7 @@ def load_system_data():
     data["credentials"].setdefault("workers_accounts", {})
     data.setdefault("workers", [])
     data.setdefault("session_state_invoices", {})
+    data.setdefault("business_orders", [])
     data.setdefault("daily_expenses", defaults["daily_expenses"])
     return data
 
@@ -486,6 +489,7 @@ def save_system_data():
         "services": st.session_state.services,
         "products": st.session_state.products,
         "session_state_invoices": st.session_state.session_state_invoices,
+        "business_orders": st.session_state.get("business_orders", []),
         "daily_sales": st.session_state.daily_sales,
         "daily_expenses": st.session_state.daily_expenses,
         "daily_archive": st.session_state.daily_archive,
@@ -503,6 +507,10 @@ def save_system_data():
                 client, payload, expected_version, actor
             )
             st.session_state["_supabase_state_version"] = new_version
+            try:
+                sync_normalized_records(client, payload, actor)
+            except Exception:
+                st.warning("تم حفظ البيانات الأساسية، لكن تعذّر تحديث بعض الجداول التفصيلية. سنعيد المحاولة مع الحفظ التالي.")
             try:
                 append_audit_log(
                     client,
@@ -626,6 +634,7 @@ if st.sidebar.button("🔄 تحديث البيانات", use_container_width=Tru
 PAGES = [
     "📊 لوحة الداشبورد الرئيسية",
     "🛒 كاشير الاستقبال POS",
+    "🚗 متابعة الطلبات",
     "📉 تقرير الحسابات والأرشيف",
     "💸 العمولات والسلفيات الحية",
     "📑 دفتر المصروفات",
@@ -645,6 +654,7 @@ selected_page = st.sidebar.radio("📍 التنقل بين الصفحات", allo
 menu_map = {
     "📊 لوحة الداشبورد الرئيسية": "dashboard",
     "🛒 كاشير الاستقبال POS": "pos",
+    "🚗 متابعة الطلبات": "orders",
     "📉 تقرير الحسابات والأرشيف": "archive",
     "💸 العمولات والسلفيات الحية": "commissions",
     "📑 دفتر المصروفات": "expenses",
@@ -905,6 +915,7 @@ def render_dashboard():
     for key in (
         "session_state_invoices", "daily_expenses", "daily_archive",
         "monthly_archive", "workers", "commission_rate", "services", "products",
+        "business_orders",
     ):
         if key in latest:
             st.session_state[key] = latest[key]
@@ -931,10 +942,12 @@ def render_dashboard():
     b.metric("📉 مصروفات اليوم", f"{current_expenses:,.2f} ج.م")
     c.metric("🏛️ ضريبة 14% تقديرية", f"{current_vat:,.2f} ج.م")
     d.metric("🚗 سيارات مخدومة", len(current_services))
+    active_orders = [o for o in st.session_state.get("business_orders", []) if o.get("status") not in ("delivered", "cancelled")]
     e, f, g = st.columns(3)
     e.metric("👨‍🔧 عمولات الفنيين", f"{current_commissions:,.2f} ج.م")
     f.metric("🟩 صافي تقديري", f"{current_net:,.2f} ج.م")
     g.metric("↩️ إجمالي المرتجعات", f"{sum(float(x.get('total',0)) for x in current_refunded):,.2f} ج.م")
+    st.metric("🚘 الطلبات المفتوحة", len(active_orders))
     st.info("ملاحظة: الضريبة محسوبة هنا كتقدير 14% من المبيعات. راجع المعالجة الضريبية الفعلية مع المحاسب.")
     st.divider()
     st.subheader("📥 تقرير اليوم")
@@ -1027,11 +1040,6 @@ def render_dashboard():
     st.subheader("📋 الفواتير والمرتجعات")
     for i, inv in enumerate(current_invoices):
         show_invoice_card(inv, "dash", i)
-
-# Streamlit fragments refresh the dashboard in the background without requiring
-# a manual page reload. Older Streamlit versions fall back to normal rendering.
-if hasattr(st, "fragment"):
-    render_dashboard = st.fragment(run_every="5s")(render_dashboard)
 
 if page == "dashboard":
     render_dashboard()
@@ -1133,6 +1141,19 @@ elif page == "pos":
             invoice_buckets = assigned if assigned else ["مبيعات مباشرة"]
             for worker_name in invoice_buckets:
                 st.session_state.session_state_invoices.setdefault(worker_name, []).append(inv.copy())
+            if not is_product:
+                order_number = f"ORD-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+                st.session_state.setdefault("business_orders", []).append({
+                    "order_number": order_number,
+                    "invoice_id": invoice_id,
+                    "plate_number": plate,
+                    "vehicle_type": car_type,
+                    "service_name": selected_item,
+                    "assigned_workers": assigned,
+                    "status": "received",
+                    "created_by": st.session_state.get("current_user") or "system",
+                    "created_at": now.isoformat(timespec="seconds"),
+                })
             save_system_data()
             st.success(f"تم إصدار الفاتورة بنجاح: {invoice_id}")
             st.balloons()
@@ -1142,6 +1163,60 @@ elif page == "pos":
     st.subheader("📋 فواتير اليوم")
     for i, inv in enumerate(invoices):
         show_invoice_card(inv, "pos", i)
+
+
+# =============================================================================
+# Live service orders and worker status tracking
+# =============================================================================
+elif page == "orders":
+    st.markdown("## 🚗 متابعة الطلبات وحالة السيارات")
+    all_orders = st.session_state.get("business_orders", [])
+    if st.session_state.user_role == "owner":
+        visible_orders = all_orders
+    else:
+        visible_orders = [
+            order for order in all_orders
+            if st.session_state.current_user in (order.get("assigned_workers") or [])
+        ]
+
+    status_labels = {
+        "received": "تم الاستلام",
+        "in_progress": "جاري التنفيذ",
+        "quality_check": "مراجعة الجودة",
+        "completed": "اكتملت الخدمة",
+        "delivered": "تم التسليم",
+        "cancelled": "ملغي",
+    }
+    status_values = list(status_labels)
+    st.caption("تتحدث لوحة المالك تلقائياً كل 5 ثوانٍ. الموظف يرى الطلبات المسندة إليه فقط.")
+    if not visible_orders:
+        st.info("لا توجد طلبات مسندة أو مسجلة حالياً.")
+    for index, order in enumerate(reversed(visible_orders)):
+        order_number = order.get("order_number", f"order-{index}")
+        current_status = order.get("status", "received")
+        with st.expander(
+            f"{order_number} · لوحة {order.get('plate_number', '---')} · "
+            f"{status_labels.get(current_status, current_status)}",
+            expanded=current_status in ("received", "in_progress", "quality_check"),
+        ):
+            c1, c2, c3 = st.columns(3)
+            c1.write(f"**الخدمة:** {order.get('service_name', '---')}")
+            c2.write(f"**السيارة:** {order.get('vehicle_type', '---')}")
+            c3.write(f"**الفنيون:** {', '.join(order.get('assigned_workers') or []) or '---'}")
+            st.caption(f"وقت الإنشاء: {order.get('created_at', '---')}")
+            selected_status = st.selectbox(
+                "تحديث حالة الطلب",
+                status_values,
+                index=status_values.index(current_status) if current_status in status_values else 0,
+                format_func=lambda value: status_labels[value],
+                key=f"order_status_{order_number}",
+            )
+            if st.button("حفظ حالة الطلب", key=f"save_order_{order_number}"):
+                order["status"] = selected_status
+                order["updated_at"] = dt.datetime.now().isoformat(timespec="seconds")
+                if save_system_data():
+                    st.success("تم تحديث حالة الطلب وتسجيل العملية.")
+                    st.rerun()
 
 
 # =============================================================================
