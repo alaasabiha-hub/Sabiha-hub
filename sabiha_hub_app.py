@@ -1467,6 +1467,28 @@ elif page == "settings":
             st.success("تم حفظ نسبة العمولة.")
             st.rerun()
         st.divider()
+        st.subheader("إعدادات الضريبة")
+        vat_rate_edit = st.number_input(
+            "نسبة الضريبة (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=float(st.session_state.get("vat_rate_percent", 14.0)),
+            step=0.5,
+            key="vat_rate_edit",
+        )
+        vat_included_edit = st.checkbox(
+            "السعر المسجل في الفاتورة شامل الضريبة",
+            value=bool(st.session_state.get("vat_included_in_sales", False)),
+            key="vat_included_edit",
+        )
+        st.caption("عند تفعيل الشمول، نستخرج جزء الضريبة من الإجمالي. عند إلغاء التفعيل، نحسب النسبة على المبيعات قبل الضريبة.")
+        if st.button("حفظ إعدادات الضريبة"):
+            st.session_state.vat_rate_percent = float(vat_rate_edit)
+            st.session_state.vat_included_in_sales = bool(vat_included_edit)
+            if save_system_data():
+                st.success("تم حفظ إعدادات الضريبة.")
+                st.rerun()
+        st.divider()
         st.subheader("إضافة خدمة")
         s1, s2, s3 = st.columns(3)
         with s1:
