@@ -674,6 +674,7 @@ PAGES = [
     "💸 العمولات والسلفيات الحية",
     "📑 دفتر المصروفات",
     "⚙️ إعدادات الباقات والعمال",
+    "🧾 سجل التدقيق",
 ]
 if st.session_state.user_role == "owner":
     allowed_pages = PAGES
@@ -681,7 +682,7 @@ else:
     acc = st.session_state.credentials.get("workers_accounts", {}).get(
         st.session_state.current_user_id, {}
     )
-    allowed_pages = [p for p in acc.get("permissions", []) if p in PAGES]
+    allowed_pages = [p for p in acc.get("permissions", []) if p in PAGES and p != "🧾 سجل التدقيق"]
     if not allowed_pages:
         allowed_pages = ["🛒 كاشير الاستقبال POS"]
 
@@ -694,6 +695,7 @@ menu_map = {
     "💸 العمولات والسلفيات الحية": "commissions",
     "📑 دفتر المصروفات": "expenses",
     "⚙️ إعدادات الباقات والعمال": "settings",
+    "🧾 سجل التدقيق": "audit",
 }
 page = menu_map[selected_page]
 
