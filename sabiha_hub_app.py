@@ -5,7 +5,7 @@ from io import BytesIO
 try:
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_RIGHT, TA_CENTER
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
@@ -795,13 +795,13 @@ def _pdf_text(value):
     return value
 
 
-def build_pdf(title, lines, table_data=None):
+def build_pdf(title, lines, table_data=None, landscape_page=False):
     """Build an A4 PDF with embedded Arabic font and RTL shaping when available."""
     if not REPORTLAB_AVAILABLE:
         return None
     buffer = BytesIO()
     doc = SimpleDocTemplate(
-        buffer, pagesize=A4, rightMargin=32, leftMargin=32,
+        buffer, pagesize=landscape(A4) if landscape_page else A4, rightMargin=32, leftMargin=32,
         topMargin=36, bottomMargin=36,
         title=str(title), author="Sabiha Hub",
     )
@@ -876,6 +876,8 @@ def invoice_pdf(inv):
         f"الخصم: {float(inv.get('discount', 0)):.2f} ج.م",
         f"الإجمالي الصافي: {float(inv.get('total', 0)):.2f} ج.م",
         f"العمولة الإجمالية: {float(inv.get('commission_total', 0)):.2f} ج.م",
+        f"الضريبة التقديرية: {float(invoice_dataframe([inv]).iloc[0]['ضريبة تقديرية']):.2f} ج.م",
+        f"صافي مساهمة السيارة قبل المصروفات التشغيلية: {float(invoice_dataframe([inv]).iloc[0]['صافي مساهمة السيارة']):.2f} ج.م",
         f"طريقة الدفع: {inv.get('payment', 'كاش')}",
         f"الحالة: {'مرتجع' if inv.get('status') == 'Refunded' else 'نشطة'}",
     ]
@@ -892,7 +894,10 @@ def report_pdf(title, invoices, summary_lines=None):
     if not df.empty:
         for _, row in df.iterrows():
             rows.append([str(row.get(c, "")) for c in columns])
-    return build_pdf(title, summary_lines or [], rows if len(rows) > 1 else None)
+    return build_pdf(
+        title, summary_lines or [], rows if len(rows) > 1 else None,
+        landscape_page=True,
+    )
 
 
 def invoice_dataframe(invoices):
