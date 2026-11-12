@@ -1426,6 +1426,36 @@ elif page == "expenses":
 
 
 # =============================================================================
+# Owner-only audit log
+# =============================================================================
+elif page == "audit":
+    st.markdown("## 🧾 سجل تدقيق العمليات")
+    client = get_supabase_client()
+    if client is None:
+        st.warning("سجل التدقيق يحتاج ربط Supabase من إعدادات Streamlit Secrets.")
+    else:
+        try:
+            response = (
+                client.table("business_audit_log")
+                .select("audit_id,actor,action,entity,entity_id,details,created_at")
+                .order("created_at", desc=True)
+                .limit(200)
+                .execute()
+            )
+            audit_rows = response.data or []
+            if audit_rows:
+                st.dataframe(
+                    pd.DataFrame(audit_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("لا توجد عمليات مسجلة حتى الآن.")
+        except Exception:
+            st.error("تعذر تحميل سجل التدقيق من قاعدة البيانات.")
+
+
+# =============================================================================
 # Settings, workers, services, products, accounts and backup
 # =============================================================================
 elif page == "settings":
