@@ -22,6 +22,10 @@ The app also records order-status notifications for the owner, provides a read-o
 
 When Supabase is configured but the shared state row does not exist, the app imports the current local JSON file if it exists. Otherwise it starts with empty owner credentials and displays a first-owner setup screen; no public default password is shipped. Make and verify a JSON backup before switching a live installation. The app does not automatically overwrite an existing Supabase state row.
 
+Production startup now requires Supabase credentials. It will stop with a setup message instead of silently falling back to ephemeral local JSON storage. For isolated local development only, set `SABIHA_ALLOW_LOCAL_STORAGE=true` to explicitly enable the JSON fallback. Do not set this flag on Streamlit Cloud.
+
+The sidebar's refresh action forces a new read from Supabase. The dashboard and live order screen also refresh their shared state every five seconds. If two sessions edit at once, the version check blocks a stale save rather than overwriting newer work.
+
 ## Deployment
 
 This branch is not the Streamlit production branch. Review and test it before merging into `main`. The current live Streamlit app URL remains `https://sabiha-auto.streamlit.app`.
