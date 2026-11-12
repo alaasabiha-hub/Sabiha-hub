@@ -884,7 +884,10 @@ def invoice_pdf(inv):
 
 def report_pdf(title, invoices, summary_lines=None):
     df = invoice_dataframe(invoices)
-    columns = ["رقم الفاتورة", "التاريخ", "رقم اللوحة", "البيان", "الإجمالي", "الحالة"]
+    columns = [
+        "رقم الفاتورة", "التاريخ", "رقم اللوحة", "البيان",
+        "الإجمالي", "العمولة", "ضريبة تقديرية", "صافي مساهمة السيارة", "الحالة"
+    ]
     rows = [columns]
     if not df.empty:
         for _, row in df.iterrows():
@@ -894,7 +897,18 @@ def report_pdf(title, invoices, summary_lines=None):
 
 def invoice_dataframe(invoices):
     rows = []
+    vat_rate_value = float(st.session_state.get("vat_rate_percent", 14.0))
+    vat_is_included = bool(st.session_state.get("vat_included_in_sales", False))
     for inv in invoices:
+        total = float(inv.get("total", 0) or 0)
+        commission = float(inv.get("commission_total", 0) or 0)
+        tax_amount = (
+            total * vat_rate_value / (100.0 + vat_rate_value)
+            if vat_is_included and vat_rate_value >= 0
+            else total * vat_rate_value / 100.0
+        )
+        is_active = inv.get("status", "Active") == "Active"
+        contribution = max(0.0, total - commission - tax_amount) if is_active else 0.0
         rows.append({
             "رقم الفاتورة": inv.get("id", ""),
             "التاريخ": inv.get("time", ""),
@@ -902,14 +916,34 @@ def invoice_dataframe(invoices):
             "النوع": "منتج" if inv.get("sale_type") == "product" else "خدمة",
             "البيان": inv.get("service", ""),
             "الفئة": inv.get("car_type", "---"),
-            "الإجمالي": float(inv.get("total", 0)),
-            "الخصم": float(inv.get("discount", 0)),
+            "الإجمالي": total,
+            "الخصم": float(inv.get("discount", 0) or 0),
             "الفنيون": "، ".join(invoice_workers(inv)),
-            "العمولة": float(inv.get("commission_total", 0)),
-            "الحالة": "نشطة" if inv.get("status", "Active") == "Active" else "مرتجع",
+            "العمولة": commission,
+            "ضريبة تقديرية": tax_amount if is_active else 0.0,
+            "صافي مساهمة السيارة": contribution,
+            "الحالة": "نشطة" if is_active else "مرتجع",
             "الدفع": inv.get("payment", "كاش"),
         })
     return pd.DataFrame(rows)
+
+
+def excel_report_bytes(invoices, summary_rows=None, archive_rows=None):
+    """Build a multi-sheet Excel workbook in memory."""
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        invoice_dataframe(invoices).to_excel(
+            writer, index=False, sheet_name="الفواتير"
+        )
+        if summary_rows:
+            pd.DataFrame(summary_rows).to_excel(
+                writer, index=False, sheet_name="الملخص"
+            )
+        if archive_rows:
+            pd.DataFrame(archive_rows).to_excel(
+                writer, index=False, sheet_name="الأرشيف"
+            )
+    return buffer.getvalue()
 
 
 def show_invoice_card(inv, prefix, index, allow_refund=True):
@@ -1042,6 +1076,78 @@ def render_dashboard():
     f.metric("🟩 صافي تقديري", f"{current_net:,.2f} ج.م")
     g.metric("↩️ إجمالي المرتجعات", f"{sum(float(x.get('total',0)) for x in current_refunded):,.2f} ج.م")
     st.metric("🚘 الطلبات المفتوحة", len(active_orders))
+
+    current_month_key = dt.datetime.now().strftime("%Y-%m")
+    month_sales = current_sales
+    month_daily_values = {}
+    for month_key, month_records in st.session_state.monthly_archive.items():
+        if month_key == current_month_key:
+            for day_label, record in month_records.items():
+                month_sales += float(record.get("sales", 0) or 0)
+                month_daily_values[str(day_label)[:10]] = float(record.get("sales", 0) or 0)
+    for day_label, record in st.session_state.daily_archive.items():
+        if str(day_label)[:7] == current_month_key:
+            month_sales += float(record.get("sales", 0) or 0)
+            month_daily_values[str(day_label)[:10]] = float(record.get("sales", 0) or 0)
+    today_label = dt.datetime.now().strftime("%Y-%m-%d")
+    month_daily_values[today_label] = current_sales
+    st.metric("📅 مبيعات الشهر حتى الآن", f"{month_sales:,.2f} ج.م")
+
+    st.subheader("📈 الرسوم والإحصائيات المباشرة")
+    chart_left, chart_right = st.columns(2)
+    with chart_left:
+        recent_daily = sorted(month_daily_values.items())[-7:]
+        if recent_daily:
+            daily_chart = pd.DataFrame(
+                [{"التاريخ": day, "المبيعات": amount} for day, amount in recent_daily]
+            ).set_index("التاريخ")
+            st.caption("المبيعات اليومية — آخر 7 أيام مسجلة")
+            st.line_chart(daily_chart)
+        else:
+            st.caption("لا توجد بيانات يومية كافية للرسم.")
+    with chart_right:
+        service_sales = {}
+        for invoice in current_active:
+            if invoice.get("sale_type", "service") == "service":
+                service_name = str(invoice.get("service") or "غير محدد")
+                service_sales[service_name] = service_sales.get(service_name, 0) + float(invoice.get("total", 0) or 0)
+        if service_sales:
+            service_chart = pd.DataFrame(
+                [{"الخدمة": name, "المبيعات": amount} for name, amount in service_sales.items()]
+            ).set_index("الخدمة")
+            st.caption("المبيعات حسب الخدمة")
+            st.bar_chart(service_chart)
+        else:
+            st.caption("لا توجد مبيعات خدمات لعرضها.")
+    payment_totals = {}
+    for invoice in current_active:
+        payment_name = str(invoice.get("payment") or "غير محدد")
+        payment_totals[payment_name] = payment_totals.get(payment_name, 0) + float(invoice.get("total", 0) or 0)
+    if payment_totals:
+        payment_chart = pd.DataFrame(
+            [{"وسيلة الدفع": name, "الإجمالي": amount} for name, amount in payment_totals.items()]
+        ).set_index("وسيلة الدفع")
+        st.caption("توزيع المبيعات حسب وسيلة الدفع")
+        st.bar_chart(payment_chart)
+
+    status_labels = {
+        "received": "تم الاستلام",
+        "in_progress": "جاري التنفيذ",
+        "quality_check": "مراجعة الجودة",
+        "completed": "اكتملت الخدمة",
+        "delivered": "تم التسليم",
+        "cancelled": "ملغي",
+    }
+    order_status_totals = {}
+    for order in st.session_state.get("business_orders", []):
+        label = status_labels.get(str(order.get("status") or ""), "غير محدد")
+        order_status_totals[label] = order_status_totals.get(label, 0) + 1
+    if order_status_totals:
+        st.caption("حالة السيارات والطلبات")
+        st.bar_chart(pd.DataFrame(
+            [{"الحالة": name, "عدد السيارات": count} for name, count in order_status_totals.items()]
+        ).set_index("الحالة"))
+
     tax_mode = "مضمنة داخل إجمالي المبيعات" if current_vat_included else "تُضاف على المبيعات قبل الضريبة"
     st.info(f"طريقة التقدير الحالية: {current_vat_rate:g}%، والضريبة {tax_mode}. راجع النسبة وطريقة التطبيق مع المحاسب وفق بلد النشاط.")
     if st.session_state.user_role == "owner":
@@ -1079,6 +1185,23 @@ def render_dashboard():
             df.to_csv(index=False).encode("utf-8-sig"),
             file_name=f"sabiha_invoices_{dt.date.today()}.csv",
             mime="text/csv",
+        )
+        daily_excel = excel_report_bytes(
+            current_invoices,
+            summary_rows=[
+                {"المؤشر": "المبيعات", "القيمة": current_sales},
+                {"المؤشر": "المصروفات", "القيمة": current_expenses},
+                {"المؤشر": "الضريبة التقديرية", "القيمة": current_vat},
+                {"المؤشر": "العمولات", "القيمة": current_commissions},
+                {"المؤشر": "صافي الربح التقديري", "القيمة": current_net},
+            ],
+        )
+        st.download_button(
+            "📊 تحميل تقرير اليوم Excel",
+            data=daily_excel,
+            file_name=f"sabiha_daily_report_{dt.date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_daily_report_excel",
         )
         report_body = (
             f"<div class='summary'><p>المبيعات: {current_sales:.2f} ج.م</p>"
