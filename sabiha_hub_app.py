@@ -938,9 +938,9 @@ def render_dashboard():
         st.warning("تعذر تحديث البيانات من Supabase حالياً. لم نكتب فوق البيانات المحفوظة.")
         return
     for key in (
-        "session_state_invoices", "daily_expenses", "daily_archive",
-        "monthly_archive", "workers", "commission_rate", "services", "products",
-        "business_orders",
+        "credentials", "session_state_invoices", "daily_sales", "daily_expenses",
+        "daily_archive", "monthly_archive", "workers", "commission_rate",
+        "services", "products", "business_orders",
     ):
         if key in latest:
             st.session_state[key] = latest[key]
@@ -1201,7 +1201,13 @@ elif page == "orders":
     def render_orders():
         latest = load_system_data()
         if not st.session_state.get("_storage_error", False):
-            st.session_state["business_orders"] = latest.get("business_orders", [])
+            for key in (
+                "credentials", "workers", "commission_rate", "services", "products",
+                "session_state_invoices", "business_orders", "daily_sales",
+                "daily_expenses", "daily_archive", "monthly_archive",
+            ):
+                if key in latest:
+                    st.session_state[key] = latest[key]
 
         st.markdown("## 🚗 متابعة الطلبات وحالة السيارات")
         all_orders = st.session_state.get("business_orders", [])
