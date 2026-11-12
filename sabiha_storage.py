@@ -136,7 +136,7 @@ def sync_normalized_records(client, payload: dict[str, Any], actor: str) -> None
             if not invoice_id or invoice_id in seen:
                 continue
             seen.add(invoice_id)
-            raw_time = item.get("time")
+            raw_time = item.get("created_at") or item.get("time")
             invoice_rows.append(
                 {
                     "invoice_id": invoice_id,
