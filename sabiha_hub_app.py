@@ -38,6 +38,7 @@ from sabiha_storage import (
     StateVersionConflict,
     sync_normalized_records,
 )
+from sabiha_ai import get_openai_config, analyze_business
 
 # =============================================================================
 # Sabiha Hub - Streamlit application
@@ -708,6 +709,7 @@ PAGES = [
     "📑 دفتر المصروفات",
     "⚙️ إعدادات الباقات والعمال",
     "🧾 سجل التدقيق",
+    "🧠 مساعد Sabiha الذكي",
 ]
 if st.session_state.user_role == "owner":
     allowed_pages = PAGES
@@ -715,7 +717,10 @@ else:
     acc = st.session_state.credentials.get("workers_accounts", {}).get(
         st.session_state.current_user_id, {}
     )
-    allowed_pages = [p for p in acc.get("permissions", []) if p in PAGES and p != "🧾 سجل التدقيق"]
+    allowed_pages = [
+        p for p in acc.get("permissions", [])
+        if p in PAGES and p not in {"🧾 سجل التدقيق", "🧠 مساعد Sabiha الذكي"}
+    ]
     if not allowed_pages:
         allowed_pages = ["🛒 كاشير الاستقبال POS"]
 
@@ -729,6 +734,7 @@ menu_map = {
     "📑 دفتر المصروفات": "expenses",
     "⚙️ إعدادات الباقات والعمال": "settings",
     "🧾 سجل التدقيق": "audit",
+    "🧠 مساعد Sabiha الذكي": "ai",
 }
 page = menu_map[selected_page]
 
@@ -1520,6 +1526,114 @@ elif page == "expenses":
         st.rerun()
     st.metric("إجمالي مصروفات اليوم", f"{rent + operational + utilities:.2f} ج.م")
 
+
+# =============================================================================
+# Owner-only AI business advisor
+# =============================================================================
+elif page == "ai":
+    st.markdown("## 🧠 مساعد Sabiha الذكي")
+    st.caption(
+        "حلّل أداء المغسلة واسأل عن المبيعات والعمولات والطلبات. "
+        "المساعد يقدم توصيات فقط ولا يغيّر أي بيانات."
+    )
+    api_key, ai_model = get_openai_config()
+    if not api_key:
+        st.info(
+            "لتفعيل المساعد، أضف OPENAI_API_KEY في Streamlit Secrets تحت قسم "
+            "[openai]. لا تضع المفتاح في GitHub أو ترسله في المحادثة."
+        )
+    else:
+        st.caption(
+            f"النموذج: {ai_model} · يتم إرسال مؤشرات مجمعة فقط، دون أسماء العملاء "
+            "أو أرقام هواتفهم أو لوحات السيارات."
+        )
+        ai_question = st.text_area(
+            "ما الذي تريد تحليله؟",
+            value="حلل أداء اليوم، وحدد أهم 3 فرص لتحسين المبيعات والربحية.",
+            height=100,
+            key="ai_business_question",
+        )
+        if st.button("✨ تحليل البيانات بالذكاء الاصطناعي", type="primary"):
+            service_mix = {}
+            payment_mix = {}
+            for invoice in active_invoices:
+                payment_name = str(invoice.get("payment") or "غير محدد")
+                payment_mix[payment_name] = payment_mix.get(payment_name, 0) + float(invoice.get("total", 0) or 0)
+                if invoice.get("sale_type", "service") == "service":
+                    service_name = str(invoice.get("service") or "غير محدد")
+                    service_mix[service_name] = service_mix.get(service_name, 0) + 1
+
+            order_status_counts = {}
+            for order in st.session_state.get("business_orders", []):
+                status_name = str(order.get("status") or "غير محدد")
+                order_status_counts[status_name] = order_status_counts.get(status_name, 0) + 1
+
+            recent_archive = []
+            for day_name, record in list(st.session_state.daily_archive.items())[-7:]:
+                recent_archive.append({
+                    "day": str(day_name),
+                    "sales": float(record.get("sales", 0) or 0),
+                    "expenses": float(record.get("expenses", 0) or 0),
+                    "estimated_tax": float(record.get("tax", 0) or 0),
+                    "commissions": float(record.get("commissions", 0) or 0),
+                    "net_estimate": float(record.get("net", 0) or 0),
+                    "cars_count": int(record.get("cars_count", 0) or 0),
+                })
+
+            snapshot = {
+                "currency_as_displayed": "ج.م",
+                "current_period_sales": round(sales_today, 2),
+                "current_period_expenses": round(expenses_today, 2),
+                "estimated_tax": round(vat_today, 2),
+                "commissions": round(commissions_today, 2),
+                "estimated_net": round(net_today, 2),
+                "active_invoice_count": len(active_invoices),
+                "refunded_invoice_count": len(refunded_invoices),
+                "average_active_invoice": round(
+                    sales_today / len(active_invoices), 2
+                ) if active_invoices else 0,
+                "sales_by_payment_method": payment_mix,
+                "service_counts": service_mix,
+                "open_orders_by_status": order_status_counts,
+                "recent_closed_days": recent_archive,
+                "active_worker_count": len(workers),
+                "configured_commission_rate_percent": float(st.session_state.commission_rate),
+                "vat_rate_percent": vat_rate,
+                "vat_included_in_sales": vat_included,
+            }
+            with st.spinner("المساعد الذكي بيحلل مؤشرات التشغيل..."):
+                try:
+                    answer = analyze_business(
+                        api_key, ai_model, snapshot, ai_question
+                    )
+                    st.session_state["ai_business_last_answer"] = answer
+                    st.session_state["_pending_audit_event"] = {
+                        "action": "ai_business_analysis",
+                        "entity": "business_app_state",
+                        "entity_id": "aggregate_metrics",
+                        "details": {
+                            "model": ai_model,
+                            "question_length": len(ai_question.strip()),
+                        },
+                    }
+                    append_audit_log(
+                        get_supabase_client(),
+                        actor=str(st.session_state.get("current_user") or "owner"),
+                        action="ai_business_analysis",
+                        entity="business_app_state",
+                        entity_id="aggregate_metrics",
+                        details={"model": ai_model},
+                    )
+                except Exception:
+                    st.error(
+                        "تعذر تنفيذ التحليل. راجع مفتاح OpenAI وإعدادات الفوترة "
+                        "واتصال الإنترنت، ثم حاول مرة أخرى."
+                    )
+        if st.session_state.get("ai_business_last_answer"):
+            st.divider()
+            st.markdown("### نتيجة التحليل")
+            st.markdown(st.session_state["ai_business_last_answer"])
+            st.caption("راجع الأرقام الأصلية قبل اتخاذ أي قرار مالي أو تشغيلي.")
 
 # =============================================================================
 # Owner-only audit log
