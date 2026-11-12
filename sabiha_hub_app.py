@@ -551,6 +551,10 @@ if "system_loaded" not in st.session_state:
         st.session_state[key] = value
     st.session_state.system_loaded = True
 
+if st.session_state.get("_storage_error", False):
+    st.error("Sabiha Hub متوقف مؤقتاً لأن قاعدة البيانات غير متاحة. لم نسمح بالدخول إلى بيانات افتراضية أو حفظ فوق بيانات غير مؤكدة.")
+    st.stop()
+
 # Automatically migrate any legacy plaintext passwords to salted one-way hashes.
 if migrate_plaintext_passwords(st.session_state.credentials):
     save_system_data()
@@ -1154,10 +1158,12 @@ elif page == "pos":
                     "created_by": st.session_state.get("current_user") or "system",
                     "created_at": now.isoformat(timespec="seconds"),
                 })
-            save_system_data()
-            st.success(f"تم إصدار الفاتورة بنجاح: {invoice_id}")
-            st.balloons()
-            st.rerun()
+            if save_system_data():
+                st.success(f"تم إصدار الفاتورة بنجاح: {invoice_id}")
+                st.balloons()
+                st.rerun()
+            else:
+                st.error("لم يتم تأكيد حفظ الفاتورة. لا تعِد إصدارها قبل تحديث الصفحة والتحقق من سجل الفواتير.")
 
     st.divider()
     st.subheader("📋 فواتير اليوم")
@@ -1581,6 +1587,7 @@ elif page == "settings":
             "services": st.session_state.services,
             "products": st.session_state.products,
             "session_state_invoices": st.session_state.session_state_invoices,
+            "business_orders": st.session_state.get("business_orders", []),
             "daily_sales": st.session_state.daily_sales,
             "daily_expenses": st.session_state.daily_expenses,
             "daily_archive": st.session_state.daily_archive,
@@ -1601,7 +1608,7 @@ elif page == "settings":
                 merged = deep_merge(default_data(), imported)
                 for key in [
                     "credentials", "workers", "commission_rate", "services", "products",
-                    "session_state_invoices", "daily_sales", "daily_expenses",
+                    "session_state_invoices", "business_orders", "daily_sales", "daily_expenses",
                     "daily_archive", "monthly_archive",
                 ]:
                     st.session_state[key] = merged[key]
