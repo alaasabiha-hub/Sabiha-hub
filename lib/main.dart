@@ -1700,11 +1700,11 @@ class CustomerDashboardScreen extends StatelessWidget {
               ),
               _DashboardTile(
                 icon: Icons.person_outline,
-                title: tr(context, 'حسابي', 'My account'),
+                title: tr(context, 'تغيير كلمة المرور', 'Change Password'),
                 subtitle: tr(
                   context,
-                  'بيانات حساب العميل',
-                  'Customer account details',
+                  'تحديث كلمة مرور حسابك بأمان',
+                  'Securely update your account password',
                 ),
                 onTap: () => Navigator.push(
                   context,
