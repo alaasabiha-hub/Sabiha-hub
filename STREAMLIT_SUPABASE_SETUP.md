@@ -20,7 +20,7 @@ The Streamlit app uses optimistic version checks when saving the shared state. I
 
 ## First connection and existing data
 
-When Supabase is configured but the shared state row does not exist, the app imports the current local JSON file if it exists. Otherwise it starts from the app defaults. Make and verify a JSON backup before switching a live installation. The app does not automatically overwrite an existing Supabase state row.
+When Supabase is configured but the shared state row does not exist, the app imports the current local JSON file if it exists. Otherwise it starts with empty owner credentials and displays a first-owner setup screen; no public default password is shipped. Make and verify a JSON backup before switching a live installation. The app does not automatically overwrite an existing Supabase state row.
 
 ## Deployment
 
