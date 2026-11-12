@@ -1607,23 +1607,20 @@ elif page == "ai":
                         api_key, ai_model, snapshot, ai_question
                     )
                     st.session_state["ai_business_last_answer"] = answer
-                    st.session_state["_pending_audit_event"] = {
-                        "action": "ai_business_analysis",
-                        "entity": "business_app_state",
-                        "entity_id": "aggregate_metrics",
-                        "details": {
-                            "model": ai_model,
-                            "question_length": len(ai_question.strip()),
-                        },
-                    }
-                    append_audit_log(
-                        get_supabase_client(),
-                        actor=str(st.session_state.get("current_user") or "owner"),
-                        action="ai_business_analysis",
-                        entity="business_app_state",
-                        entity_id="aggregate_metrics",
-                        details={"model": ai_model},
-                    )
+                    try:
+                        append_audit_log(
+                            get_supabase_client(),
+                            actor=str(st.session_state.get("current_user") or "owner"),
+                            action="ai_business_analysis",
+                            entity="business_app_state",
+                            entity_id="aggregate_metrics",
+                            details={
+                                "model": ai_model,
+                                "question_length": len(ai_question.strip()),
+                            },
+                        )
+                    except Exception:
+                        st.warning("اكتمل التحليل، لكن تعذر حفظ حدث التحليل في سجل التدقيق.")
                 except Exception:
                     st.error(
                         "تعذر تنفيذ التحليل. راجع مفتاح OpenAI وإعدادات الفوترة "
