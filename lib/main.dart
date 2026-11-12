@@ -591,13 +591,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8 ||
+        !RegExp(r'[A-Za-z]').hasMatch(password) ||
+        !RegExp(r'\d').hasMatch(password)) {
       showMessage(
         context,
         tr(
           context,
-          'كلمة المرور يجب ألا تقل عن 6 أحرف',
-          'Password must be at least 6 characters',
+          'كلمة المرور يجب ألا تقل عن 8 أحرف وأن تحتوي على حرف ورقم',
+          'Password must be at least 8 characters and include a letter and a number',
         ),
       );
       return;
@@ -1082,13 +1084,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
-    if (password.length < 6) {
+    if (password.length < 8 ||
+        !RegExp(r'[A-Za-z]').hasMatch(password) ||
+        !RegExp(r'\d').hasMatch(password)) {
       showMessage(
         context,
         tr(
           context,
-          'كلمة المرور يجب ألا تقل عن 6 أحرف',
-          'Password must be at least 6 characters',
+          'كلمة المرور يجب ألا تقل عن 8 أحرف وأن تحتوي على حرف ورقم',
+          'Password must be at least 8 characters and include a letter and a number',
         ),
       );
       return;
@@ -1453,12 +1457,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     setState(() => _loading = true);
     try {
-      await supabase.auth.signInWithPassword(
-        email: email,
-        password: currentPassword,
-      );
       await supabase.auth.updateUser(
-        UserAttributes(password: newPassword),
+        UserAttributes(
+          password: newPassword,
+          currentPassword: currentPassword,
+        ),
       );
       if (!mounted) return;
       showMessage(context, tr(context, 'تم تغيير كلمة المرور بنجاح', 'Your password has been changed successfully'));
