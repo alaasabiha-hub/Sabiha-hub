@@ -45,13 +45,9 @@ def analyze_business(
     )
     user_input = (
         "هذه مؤشرات تشغيلية مجمعة بعد إزالة أي بيانات تعريفية. "
-        "حللها وأجب عن سؤال المالك:
-"
-        f"السؤال: {question.strip() or 'حلل الأداء الحالي واقترح أهم 3 تحسينات.'}
-
-"
-        "المؤشرات:
-"
+        "حللها وأجب عن سؤال المالك:\n"
+        f"السؤال: {question.strip() or 'حلل الأداء الحالي واقترح أهم 3 تحسينات.'}\n\n"
+        "المؤشرات:\n"
         + json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
     )
     response = client.responses.create(
