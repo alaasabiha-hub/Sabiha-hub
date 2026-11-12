@@ -34,6 +34,7 @@ from sabiha_storage import (
     load_business_state,
     save_business_state,
     append_audit_log,
+    append_business_notification,
     StateVersionConflict,
     sync_normalized_records,
 )
@@ -511,6 +512,18 @@ def save_system_data():
             except Exception:
                 st.warning("تم حفظ البيانات الأساسية، لكن تعذّر تحديث بعض الجداول التفصيلية. سنعيد المحاولة مع الحفظ التالي.")
             event = st.session_state.get("_pending_audit_event") or {}
+            if event.get("action") == "order_status_changed":
+                try:
+                    order_status = (event.get("details") or {}).get("to", "")
+                    append_business_notification(
+                        client,
+                        order_number=str(event.get("entity_id") or ""),
+                        message=f"تم تحديث حالة الطلب {event.get('entity_id')}: {order_status}",
+                        status=str(order_status),
+                        actor=actor,
+                    )
+                except Exception:
+                    pass
             try:
                 append_audit_log(
                     client,
@@ -1010,6 +1023,31 @@ def render_dashboard():
     st.metric("🚘 الطلبات المفتوحة", len(active_orders))
     tax_mode = "مضمنة داخل إجمالي المبيعات" if current_vat_included else "تُضاف على المبيعات قبل الضريبة"
     st.info(f"طريقة التقدير الحالية: {current_vat_rate:g}%، والضريبة {tax_mode}. راجع النسبة وطريقة التطبيق مع المحاسب وفق بلد النشاط.")
+    if st.session_state.user_role == "owner":
+        notification_client = get_supabase_client()
+        if notification_client is not None:
+            st.subheader("🔔 تنبيهات الطلبات")
+            try:
+                notification_response = (
+                    notification_client.table("business_notifications")
+                    .select("order_number,message,status,actor,created_at")
+                    .eq("is_read", False)
+                    .order("created_at", desc=True)
+                    .limit(10)
+                    .execute()
+                )
+                unread_notifications = notification_response.data or []
+                if unread_notifications:
+                    st.dataframe(pd.DataFrame(unread_notifications), use_container_width=True, hide_index=True)
+                    if st.button("تحديد التنبيهات كمقروءة", key="mark_business_notifications_read"):
+                        notification_client.table("business_notifications").update(
+                            {"is_read": True}
+                        ).eq("is_read", False).execute()
+                        st.rerun()
+                else:
+                    st.caption("لا توجد تنبيهات جديدة.")
+            except Exception:
+                st.warning("تعذر تحميل تنبيهات الطلبات حالياً.")
     st.divider()
     st.subheader("📥 تقرير اليوم")
     df = invoice_dataframe(current_invoices)
