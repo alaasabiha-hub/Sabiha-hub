@@ -256,6 +256,8 @@ def sync_normalized_records(client, payload: dict[str, Any], actor: str) -> None
 
     settings = {
         "commission_rate": payload.get("commission_rate", 0),
+        "vat_rate_percent": payload.get("vat_rate_percent", 14.0),
+        "vat_included_in_sales": payload.get("vat_included_in_sales", False),
         "services": payload.get("services") or {},
         "products": payload.get("products") or {},
     }
