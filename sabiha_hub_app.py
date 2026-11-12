@@ -393,7 +393,7 @@ def default_data():
                     "name": "كاشير الاستقبال",
                     "password": "pos123",
                     "role": "worker",
-                    "permissions": ["🛒 كاشير الاستقبال POS", "📑 دفتر المصروفات"],
+                    "permissions": ["🛒 كاشير الاستقبال POS", "🚗 متابعة الطلبات", "📑 دفتر المصروفات"],
                 }
             },
         },
@@ -1562,7 +1562,7 @@ elif page == "settings":
         permissions = st.multiselect(
             "صلاحيات الموظف الجديد",
             PAGES,
-            default=["🛒 كاشير الاستقبال POS"],
+            default=["🛒 كاشير الاستقبال POS", "🚗 متابعة الطلبات"],
             key="create_permissions",
         )
         if st.button("إنشاء حساب الموظف"):
