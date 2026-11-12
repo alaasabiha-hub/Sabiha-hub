@@ -1138,7 +1138,7 @@ elif page == "pos":
         if invalid:
             st.error("راجع بيانات العملية قبل إصدار الفاتورة.")
         else:
-            now = dt.datetime.now()
+            now = dt.datetime.now().astimezone()
             invoice_id = f"INV-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
             assigned = selected_workers if not is_product else (
                 [product_worker] if product_worker != "مبيعات مباشرة" else []
@@ -1161,6 +1161,7 @@ elif page == "pos":
                 "payment": payment,
                 "status": "Active",
                 "time": now.strftime("%Y-%m-%d %H:%M:%S"),
+                "created_at": now.isoformat(timespec="seconds"),
             }
             # Store a copy under every participating worker; dashboard deduplicates by invoice ID.
             invoice_buckets = assigned if assigned else ["مبيعات مباشرة"]
