@@ -1,0 +1,23 @@
+[functions.dispatch-marketing-campaigns]
+verify_jwt = false
+
+[functions.dispatch-document-expiry-alerts]
+verify_jwt = false
+
+[functions.analyze-business-document]
+verify_jwt = true
+
+[functions.ask-business-documents]
+verify_jwt = true
+
+[functions.paymob-sandbox]
+verify_jwt = false
+
+[functions.paymob-webhook]
+verify_jwt = false
+
+[functions.recruitment-cv]
+verify_jwt = false
+
+[functions.owner-evidence-advisor]
+verify_jwt = true

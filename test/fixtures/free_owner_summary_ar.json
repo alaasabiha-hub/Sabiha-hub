@@ -1,0 +1,285 @@
+{
+  "state": "missing_data",
+  "topic": "summary",
+  "answer": "إجمالي الفواتير المسجل: ١٬٠٠٠ جنيه مصري (الفترة المختارة).\nصافي التحصيل النقدي المسجل: ٢٥٠ جنيه مصري (الفترة المختارة).\nالمصروفات المسجلة: ٢٠ جنيه مصري (الفترة المختارة).\nالحجوزات المسجلة: ٨ (الفترة المختارة).\nالحجوزات المكتملة المسجلة: ١ (الفترة المختارة).\nالعملاء المختلفون في الحجوزات: ٣ (الفترة المختارة).\nالمنتجات النشطة حاليًا: ٤ (لقطة حالية وليست بيانات تاريخية).\nمنتجات نشطة برصيد مسجل صفر حاليًا: ٠ (لقطة حالية وليست بيانات تاريخية).\nمتوسط نجوم المراجعات المسجلة: ٤٫٥ نجوم (الفترة المختارة).\nصافي تحصيل البطاقة المسجل: ٠ جنيه مصري.\nحركات الولاء المرتبطة بطلبات الفرع: ٠.\nمرات استخدام الكوبونات المسجلة: ٠.\nالعروض النشطة حاليًا: ٠ (لقطة حالية وليست بيانات تاريخية).\nالشكاوى المسجلة خلال الفترة: ٠.\nالمستندات التي تنتهي خلال 30 يومًا: ٠ (لقطة حالية وليست بيانات تاريخية).\nطلبات التوظيف قيد المراجعة: ٠.\nنسبة اجتياز فحوص الجودة المسجلة: غير متاح من الأدلة الحالية.\nتكلفة أوامر الشراء المستلمة والمسجلة: ٠ جنيه مصري (الفترة المختارة).\nالفوترة والتحصيل قياسان مختلفان؛ هذه الأرقام ليست الربح الفعلي.",
+  "facts": [
+    {
+      "id": "billed_revenue",
+      "value": 1000,
+      "unit": "EGP",
+      "source": "business_invoices",
+      "count": 7,
+      "basis": "window"
+    },
+    {
+      "id": "cash_net",
+      "value": 250,
+      "unit": "EGP",
+      "source": "business_payment_events",
+      "count": 3,
+      "basis": "window"
+    },
+    {
+      "id": "recorded_expenses",
+      "value": 20,
+      "unit": "EGP",
+      "source": "business_expenses",
+      "count": 1,
+      "basis": "window"
+    },
+    {
+      "id": "bookings",
+      "value": 8,
+      "unit": "count",
+      "source": "bookings",
+      "count": 8,
+      "basis": "window"
+    },
+    {
+      "id": "completed_bookings",
+      "value": 1,
+      "unit": "count",
+      "source": "bookings",
+      "count": 1,
+      "basis": "window"
+    },
+    {
+      "id": "distinct_booking_customers",
+      "value": 3,
+      "unit": "count",
+      "source": "bookings",
+      "count": 8,
+      "basis": "window"
+    },
+    {
+      "id": "active_products",
+      "value": 4,
+      "unit": "count",
+      "source": "business_catalog_items",
+      "count": 4,
+      "basis": "current_snapshot"
+    },
+    {
+      "id": "out_of_stock_products",
+      "value": 0,
+      "unit": "count",
+      "source": "business_catalog_items",
+      "count": 4,
+      "basis": "current_snapshot"
+    },
+    {
+      "id": "average_review_stars",
+      "value": 4.5,
+      "unit": "stars",
+      "source": "employee_service_reviews",
+      "count": 2,
+      "basis": "window"
+    },
+    {
+      "id": "card_terminal_net",
+      "value": 0,
+      "unit": "EGP",
+      "source": "business_payment_events",
+      "count": 0,
+      "basis": "window"
+    },
+    {
+      "id": "loyalty_movements",
+      "value": 0,
+      "unit": "count",
+      "source": "business_loyalty_transactions",
+      "count": 0,
+      "basis": "window"
+    },
+    {
+      "id": "coupon_redemptions",
+      "value": 0,
+      "unit": "count",
+      "source": "business_coupon_redemptions",
+      "count": 0,
+      "basis": "window"
+    },
+    {
+      "id": "active_offers",
+      "value": 0,
+      "unit": "count",
+      "source": "business_offers",
+      "count": 0,
+      "basis": "current_snapshot"
+    },
+    {
+      "id": "complaints_received",
+      "value": 0,
+      "unit": "count",
+      "source": "customer_complaints",
+      "count": 0,
+      "basis": "window"
+    },
+    {
+      "id": "documents_expiring_30d",
+      "value": 0,
+      "unit": "count",
+      "source": "business_documents",
+      "count": 0,
+      "basis": "current_snapshot"
+    },
+    {
+      "id": "pending_recruitment",
+      "value": 0,
+      "unit": "count",
+      "source": "private.recruitment_applications",
+      "count": 0,
+      "basis": "window"
+    },
+    {
+      "id": "quality_pass_rate",
+      "value": null,
+      "unit": "percent",
+      "source": "private.service_quality_checks",
+      "count": 0,
+      "basis": "window"
+    },
+    {
+      "id": "received_purchase_costs",
+      "value": 0,
+      "unit": "EGP",
+      "source": "public.business_purchase_orders",
+      "count": 0,
+      "basis": "window"
+    }
+  ],
+  "citations": [
+    {
+      "evidence_id": "billed_revenue",
+      "source": "business_invoices",
+      "basis": "window",
+      "count": 7
+    },
+    {
+      "evidence_id": "cash_net",
+      "source": "business_payment_events",
+      "basis": "window",
+      "count": 3
+    },
+    {
+      "evidence_id": "recorded_expenses",
+      "source": "business_expenses",
+      "basis": "window",
+      "count": 1
+    },
+    {
+      "evidence_id": "bookings",
+      "source": "bookings",
+      "basis": "window",
+      "count": 8
+    },
+    {
+      "evidence_id": "completed_bookings",
+      "source": "bookings",
+      "basis": "window",
+      "count": 1
+    },
+    {
+      "evidence_id": "distinct_booking_customers",
+      "source": "bookings",
+      "basis": "window",
+      "count": 8
+    },
+    {
+      "evidence_id": "active_products",
+      "source": "business_catalog_items",
+      "basis": "current_snapshot",
+      "count": 4
+    },
+    {
+      "evidence_id": "out_of_stock_products",
+      "source": "business_catalog_items",
+      "basis": "current_snapshot",
+      "count": 4
+    },
+    {
+      "evidence_id": "average_review_stars",
+      "source": "employee_service_reviews",
+      "basis": "window",
+      "count": 2
+    },
+    {
+      "evidence_id": "card_terminal_net",
+      "source": "business_payment_events",
+      "basis": "window",
+      "count": 0
+    },
+    {
+      "evidence_id": "loyalty_movements",
+      "source": "business_loyalty_transactions",
+      "basis": "window",
+      "count": 0
+    },
+    {
+      "evidence_id": "coupon_redemptions",
+      "source": "business_coupon_redemptions",
+      "basis": "window",
+      "count": 0
+    },
+    {
+      "evidence_id": "active_offers",
+      "source": "business_offers",
+      "basis": "current_snapshot",
+      "count": 0
+    },
+    {
+      "evidence_id": "complaints_received",
+      "source": "customer_complaints",
+      "basis": "window",
+      "count": 0
+    },
+    {
+      "evidence_id": "documents_expiring_30d",
+      "source": "business_documents",
+      "basis": "current_snapshot",
+      "count": 0
+    },
+    {
+      "evidence_id": "pending_recruitment",
+      "source": "private.recruitment_applications",
+      "basis": "window",
+      "count": 0
+    },
+    {
+      "evidence_id": "quality_pass_rate",
+      "source": "private.service_quality_checks",
+      "basis": "window",
+      "count": 0
+    },
+    {
+      "evidence_id": "received_purchase_costs",
+      "source": "public.business_purchase_orders",
+      "basis": "window",
+      "count": 0
+    }
+  ],
+  "mode": "free_evidence_templates",
+  "paid_provider_allowed": false,
+  "limitations": [
+    "active_default_branch_only",
+    "incomplete_costs_no_actual_profit",
+    "stock_is_current_not_historical",
+    "workload_is_booking_count_not_employee_productivity",
+    "reviews_may_be_small_or_unrepresentative",
+    "no_marketing_attribution",
+    "no_forecast_or_causal_inference",
+    "gateway_fees_unavailable",
+    "documents_are_company_wide",
+    "loyalty_metrics_cover_order_linked_movements",
+    "quality_checks_are_not_employee_scores",
+    "purchases_are_received_records_not_recommendations"
+  ],
+  "requires_owner_review": true,
+  "execution_supported": false,
+  "period": {
+    "from": "2026-11-01",
+    "to": "2026-11-15"
+  },
+  "scope": "active_default_branch",
+  "fixture_only": true
+}

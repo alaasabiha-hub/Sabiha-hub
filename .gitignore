@@ -46,3 +46,21 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Local verification and private development state
+**/node_modules/
+**/__pycache__/
+.streamlit/secrets.toml
+*.local.json
+.firebase-qa/
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+local-config/firebase-qa-dart-defines.json
+local-config/supabase-qa.local.json
+*.json.lock
+*.json.backups/
+
+# Distribution signing material
+android/key.properties
+*.jks
+*.keystore

@@ -1,0 +1,17 @@
+# Live in-app badge — source contract
+
+`AppInboxButton(client: client, onOpen: () async { ... }, color: optional)` is a reusable header action. Root owns existing dashboard wiring. It introduces no table subscription, push/SMS, paid provider or background delivery guarantee. It keeps only an unread integer and availability state; no event body, receipt, reason or message cache is persisted.
+
+The pinned Dart SDK supports `client.channel('app-inbox:<current Auth UUID>', opts: const RealtimeChannelConfig(private: true))`, `onBroadcast(event: 'inbox_changed', ...)` and `RealtimeSubscribeStatus.subscribed`. A valid application hint is `kind=inbox_changed` in the SDK broadcast envelope's inner payload (or the direct map). Managed random metadata is ignored. A hint never supplies a count, identity, read receipt or data permission; it only schedules fresh `list_my_app_inbox` with limit25 and null cursors. The server remains the authority on every read.
+
+A fixed 150ms debounce does not slide indefinitely. Hints arriving during an authorized read set a dirty flag and result in one trailing refresh; a further hint during that trailing request is retained. Reads time out after15s. Subscribe/reconnect, foreground resume and returning from the opened inbox also refresh. Foreground route-visible polling every20s covers missing broadcasts, without claiming immediate delivery if the transport fails.
+
+`ModalRoute.isCurrentOf(context)`, app lifecycle and the awaited `onOpen` route control visibility. Covered/background routes stop timers and unsubscribe. Hidden hints only mark dirty; return/resume fetches current facts. No forever poller remains on hidden routes. The component owns its supplied controller/transport lifecycle and disposes it on removal.
+
+The first SDK event is ignored only if it matches the captured initial session using the existing shared helper. Other auth events immediately zero the badge, increment the response epoch and unsubscribe. A fresh nonnull session for the **same bound actor only** may reauthorize the private connection with `client.realtime.setAuth(currentSession.accessToken)` and refetch with the current token. No token is stored by this component. Signout/different actor permanently fences the mounted component, even if the original account later signs in; a new widget is required. All old in-flight replies are ignored. Channel leave completes before rejoining, with a subscription generation guard.
+
+A failed fresh RPC clears the count and shows a generic unavailable indicator; no optimistic read or decrement is performed. Arabic/English tooltip and live semantics expose only count/check availability, using navy/royal/silver-compatible styling. Opening the inbox does not mark anything read.
+
+References checked against the installed SDK and official documentation: [Broadcast](https://supabase.com/docs/guides/realtime/broadcast), [Flutter subscribe](https://supabase.com/docs/reference/dart/subscribe). The SDK implementation confirms envelope delivery and `Future<void> setAuth(String?)`. No dependency upgrade was performed.
+
+Focused tests cover dirty trailing refresh, hidden/background/resume/poll behavior, reconnection and failed read, invalidation and late reply, AR390/EN1440 accessibility, initial replay/signout fencing, normal same-actor token refresh, actual route coverage/return and envelope parsing. These mocked component checks do not replace actual private-channel/RPC authorization and browser acceptance. No DB, build or browser operation was performed by this author.

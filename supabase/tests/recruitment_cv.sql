@@ -1,0 +1,30 @@
+begin;
+do $$
+declare own uuid;branch uuid;job uuid:=gen_random_uuid();app uuid;v jsonb;path text;denied boolean;cap text:=repeat('a',64);hash text:=repeat('b',64);
+begin
+ select user_id into strict own from public.staff_profiles where role='owner' and is_active limit 1;
+ select branch_id into strict branch from public.business_branches where is_active limit 1;
+ insert into private.recruitment_jobs(id,title_ar,title_en,details_ar,details_en,branch_id,published,created_by) values(job,'اختبار مرفق','Attachment QA','اختبار خاص','Private QA',branch,true,own);
+ perform set_config('request.jwt.claim.sub','',true);execute 'set local role anon';
+ v:=public.recruitment_action('submit',jsonb_build_object('request_id',gen_random_uuid(),'job_id',job,'name','Synthetic CV applicant','email','cv-qa@example.invalid','cv_capability_hash',cap));app:=(v->>'application_id')::uuid;
+ denied:=false;begin perform public.claim_recruitment_cv(app,cap,32,hash);exception when insufficient_privilege then denied:=true;end;assert denied,'Anonymous caller claimed upload directly';
+ denied:=false;begin perform public.owner_recruitment_cv(app);exception when insufficient_privilege then denied:=true;end;assert denied,'Anonymous owner-download RPC callable';
+ execute 'reset role';update private.recruitment_cv set expires_at=now()-interval '1 minute' where application_id=app;execute 'set local role service_role';
+ denied:=false;begin perform public.claim_recruitment_cv(app,cap,32,hash);exception when raise_exception then denied:=true;end;assert denied,'Expired capability accepted';
+ execute 'reset role';update private.recruitment_cv set expires_at=now()+interval '15 minutes' where application_id=app;execute 'set local role service_role';
+ denied:=false;begin perform public.claim_recruitment_cv(app,repeat('c',64),32,hash);exception when raise_exception then denied:=true;end;assert denied,'Wrong capability accepted';
+ denied:=false;begin perform public.claim_recruitment_cv(app,cap,2097153,hash);exception when raise_exception then denied:=true;end;assert denied,'Oversized attachment claimed';
+ v:=public.claim_recruitment_cv(app,cap,32,hash);path:=v->>'path';assert path=app::text||'/'||hash||'.pdf';assert v=public.claim_recruitment_cv(app,cap,32,hash),'Same upload retry changed claim';
+ denied:=false;begin perform public.claim_recruitment_cv(app,cap,33,repeat('d',64));exception when raise_exception then denied:=true;end;assert denied,'Capability reused for another file';
+ denied:=false;begin perform public.finalize_recruitment_cv(app,hash);exception when raise_exception then denied:=true;end;assert denied,'Missing object finalized';
+ execute 'reset role';insert into storage.objects(bucket_id,name,metadata) values('recruitment-cv-quarantine',path,jsonb_build_object('size',32,'mimetype','application/pdf'));
+ execute 'set local role anon';assert not exists(select 1 from storage.objects where bucket_id='recruitment-cv-quarantine'),'Anonymous listed quarantine';
+ denied:=false;begin insert into storage.objects(bucket_id,name) values('recruitment-cv-quarantine','unrestricted.pdf');exception when insufficient_privilege then denied:=true;end;assert denied,'Anonymous unrestricted storage write';
+ execute 'set local role service_role';v:=public.finalize_recruitment_cv(app,hash);assert v->>'state'='quarantined_unscanned';assert v=public.finalize_recruitment_cv(app,hash),'Finalization replay changed result';
+ perform set_config('request.jwt.claim.sub',own::text,true);execute 'set local role authenticated';v:=public.owner_recruitment_cv(app);assert v->>'path'=path and v->>'state'='quarantined_unscanned';
+ assert not exists(select 1 from storage.objects where bucket_id='recruitment-cv-quarantine'),'Owner direct storage listing should be denied';
+ execute 'reset role';update public.staff_profiles set is_active=false where user_id=own;execute 'set local role authenticated';
+ denied:=false;begin perform public.owner_recruitment_cv(app);exception when insufficient_privilege then denied:=true;end;assert denied,'Revoked owner downloaded CV';
+ raise notice 'PASS capability expiry/binding/limits/retry, service-only write boundary, private no-list storage and live owner unscanned download authorization';
+end $$;
+rollback;

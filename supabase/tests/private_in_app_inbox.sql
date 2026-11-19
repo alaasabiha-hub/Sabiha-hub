@@ -1,0 +1,86 @@
+-- SOURCE ONLY: root reviews/applies migration and runs this rollback fixture.
+-- No Auth account, claim/link, order, finance or loyalty fixtures are created.
+begin;
+create function pg_temp.set_inbox_actor(p_actor uuid)returns void language plpgsql as $$declare sid uuid;begin
+ select id into strict sid from auth.sessions where user_id=p_actor and(not_after is null or not_after>clock_timestamp())order by created_at desc limit 1;
+ perform set_config('request.jwt.claim.sub',p_actor::text,true);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',p_actor,'role','authenticated','session_id',sid)::text,true);
+end$$;
+do $$
+declare own uuid;manager uuid;customer uuid;other_customer uuid;cashier uuid;
+ source1 uuid:=gen_random_uuid();source2 uuid:=gen_random_uuid();source3 uuid:=gen_random_uuid();source4 uuid:=gen_random_uuid();case_ref uuid:=gen_random_uuid();
+ e1 uuid;e2 uuid;pool_event uuid;foreign_event uuid;nonce uuid:=gen_random_uuid();owner_nonce uuid:=gen_random_uuid();
+ value jsonb;first_receipt jsonb;second_receipt jsonb;page jsonb;denied boolean;baseline bigint;
+begin
+ select s.user_id into strict own from public.staff_profiles s join auth.users u on u.id=s.user_id where s.role='owner'and s.is_active and u.deleted_at is null and exists(select 1 from auth.sessions ses where ses.user_id=u.id and(ses.not_after is null or ses.not_after>clock_timestamp()))limit 1;
+ select s.user_id into strict manager from public.staff_profiles s join auth.users u on u.id=s.user_id where s.role='manager'and s.is_active and u.deleted_at is null and exists(select 1 from auth.sessions ses where ses.user_id=u.id and(ses.not_after is null or ses.not_after>clock_timestamp()))limit 1;
+ select s.user_id into strict cashier from public.staff_profiles s join auth.users u on u.id=s.user_id where s.role='employee'and s.is_active and u.deleted_at is null and exists(select 1 from auth.sessions ses where ses.user_id=u.id and(ses.not_after is null or ses.not_after>clock_timestamp()))limit 1;
+ select c.id into strict customer from public.customers c join auth.users u on u.id=c.id where u.deleted_at is null and(u.banned_until is null or u.banned_until<=clock_timestamp())and not exists(select 1 from public.staff_profiles s where s.user_id=c.id)and exists(select 1 from auth.sessions ses where ses.user_id=c.id and(ses.not_after is null or ses.not_after>clock_timestamp()))order by c.id limit 1;
+ select c.id into strict other_customer from public.customers c join auth.users u on u.id=c.id where c.id<>customer and u.deleted_at is null and(u.banned_until is null or u.banned_until<=clock_timestamp())and not exists(select 1 from public.staff_profiles s where s.user_id=c.id)and exists(select 1 from auth.sessions ses where ses.user_id=c.id and(ses.not_after is null or ses.not_after>clock_timestamp()))order by c.id limit 1;
+ assert not has_table_privilege('authenticated','private.app_inbox_events','SELECT');
+ assert not has_table_privilege('authenticated','private.app_inbox_reads','INSERT');
+ assert not has_table_privilege('service_role','private.app_inbox_events','INSERT');
+ assert not has_function_privilege('anon','public.list_my_app_inbox(timestamptz,uuid,integer)','EXECUTE');
+ assert not has_function_privilege('authenticated','private.append_visit_recovery_inbox(uuid,uuid,text,uuid,text)','EXECUTE');
+ assert to_regprocedure('public.append_visit_recovery_inbox(uuid,uuid,text,uuid,text)')is null;
+ perform pg_temp.set_inbox_actor(customer);
+ value:=public.list_my_app_inbox();baseline:=(value->>'unread_count')::bigint;
+ -- Internal event append is exercised as the database owner, never a client API.
+ e1:=private.append_visit_recovery_inbox(source1,case_ref,'customer',customer,'recovery_received');
+ assert private.append_visit_recovery_inbox(source1,case_ref,'customer',customer,'recovery_received')=e1;
+ assert(select count(*)from private.app_inbox_events where source_event_id=source1)=1;
+ denied:=false;begin perform private.append_visit_recovery_inbox(source1,case_ref,'customer',customer,'recovery_approved');exception when invalid_parameter_value then denied:=true;end;assert denied;
+ denied:=false;begin perform private.append_visit_recovery_inbox(gen_random_uuid(),case_ref,'customer',customer,'custom_secret_text');exception when invalid_parameter_value then denied:=true;end;assert denied;
+ denied:=false;begin perform private.append_visit_recovery_inbox(gen_random_uuid(),case_ref,'active_owner_pool',customer,'recovery_submitted');exception when invalid_parameter_value then denied:=true;end;assert denied;
+ e2:=private.append_visit_recovery_inbox(source2,case_ref,'customer',customer,'recovery_more_info');
+ pool_event:=private.append_visit_recovery_inbox(source3,case_ref,'active_owner_pool',null,'recovery_submitted');
+ foreign_event:=private.append_visit_recovery_inbox(source4,case_ref,'customer',other_customer,'recovery_received');
+ assert(select parameters='{}'::jsonb and template_version=1 and length(title_ar)>0 and length(title_en)>0 and length(body_ar)>0 and length(body_en)>0 from private.app_inbox_events where event_id=e1);
+ value:=public.list_my_app_inbox();
+ assert(value->>'unread_count')::bigint=baseline+2;
+ assert exists(select 1 from jsonb_array_elements(value->'items')r where r->>'event_id'=e1::text);
+ assert not exists(select 1 from jsonb_array_elements(value->'items')r where r->>'event_id'in(pool_event::text,foreign_event::text));
+ assert value->>'push_enabled'='false'and value->>'recovery_workflow_complete'='false';
+ assert not exists(select 1 from jsonb_array_elements(value->'items')r where r?'profile_id'or r?'phone'or r?'secret'or r?'invoice_token'or r?'wallet');
+ first_receipt:=public.mark_my_app_inbox_read(nonce,e1);
+ assert first_receipt=public.mark_my_app_inbox_read(nonce,e1);
+ second_receipt:=public.mark_my_app_inbox_read(gen_random_uuid(),e1);assert second_receipt=first_receipt;
+ assert(select count(*)from private.app_inbox_reads where event_id=e1 and actor_id=customer)=1;
+ assert(public.list_my_app_inbox()->>'unread_count')::bigint=baseline+1;
+ denied:=false;begin perform public.mark_my_app_inbox_read(nonce,e2);exception when invalid_parameter_value then denied:=true;end;assert denied;
+ denied:=false;begin perform public.mark_my_app_inbox_read(gen_random_uuid(),foreign_event);exception when insufficient_privilege then denied:=true;end;assert denied;
+ denied:=false;begin perform public.mark_my_app_inbox_read(gen_random_uuid(),gen_random_uuid());exception when insufficient_privilege then denied:=true;end;assert denied;
+ page:=public.list_my_app_inbox(null,null,1);assert jsonb_array_length(page->'items')=1 and page->'next_cursor'<>'null'::jsonb;
+ value:=public.list_my_app_inbox((page#>>'{next_cursor,created_at}')::timestamptz,(page#>>'{next_cursor,event_id}')::uuid,1);
+ assert jsonb_array_length(value->'items')=1 and value#>>'{items,0,event_id}'is distinct from page#>>'{items,0,event_id}';
+ denied:=false;begin perform public.list_my_app_inbox(null,null,0);exception when invalid_parameter_value then denied:=true;end;assert denied;
+ denied:=false;begin perform public.list_my_app_inbox(null,null,51);exception when invalid_parameter_value then denied:=true;end;assert denied;
+ denied:=false;begin perform public.list_my_app_inbox(clock_timestamp(),null,25);exception when invalid_parameter_value then denied:=true;end;assert denied;
+ perform pg_temp.set_inbox_actor(other_customer);
+ value:=public.list_my_app_inbox();assert exists(select 1 from jsonb_array_elements(value->'items')r where r->>'event_id'=foreign_event::text);
+ assert not exists(select 1 from jsonb_array_elements(value->'items')r where r->>'event_id'in(e1::text,e2::text,pool_event::text));
+ perform pg_temp.set_inbox_actor(cashier);
+ denied:=false;begin perform public.mark_my_app_inbox_read(gen_random_uuid(),pool_event);exception when insufficient_privilege then denied:=true;end;assert denied;
+ begin value:=public.list_my_app_inbox();assert not exists(select 1 from jsonb_array_elements(value->'items')r where r->>'event_id'=pool_event::text);exception when insufficient_privilege then null;end;
+ perform pg_temp.set_inbox_actor(own);
+ value:=public.list_my_app_inbox();assert exists(select 1 from jsonb_array_elements(value->'items')r where r->>'event_id'=pool_event::text);
+ first_receipt:=public.mark_my_app_inbox_read(owner_nonce,pool_event);
+ assert public.mark_my_app_inbox_read(owner_nonce,pool_event)=first_receipt;
+ -- Temporarily promote an existing manager solely inside this rollback fixture;
+ -- a second active owner must have independent read state for the SAME pool event.
+ update public.staff_profiles set role='owner'where user_id=manager;
+ perform pg_temp.set_inbox_actor(manager);
+ value:=public.list_my_app_inbox();assert exists(select 1 from jsonb_array_elements(value->'items')r where r->>'event_id'=pool_event::text and r->>'read'='false');
+ second_receipt:=public.mark_my_app_inbox_read(owner_nonce,pool_event);
+ assert(select count(*)from private.app_inbox_reads where event_id=pool_event and actor_id in(own,manager))=2;
+ perform pg_temp.set_inbox_actor(own);
+ update public.staff_profiles set role='manager'where user_id=manager;
+ perform pg_temp.set_inbox_actor(manager);
+ denied:=false;begin perform public.mark_my_app_inbox_read(owner_nonce,pool_event);exception when insufficient_privilege then denied:=true;end;assert denied,'Former owner retained privileged replay access';
+ perform set_config('request.jwt.claim.sub','',true);
+ denied:=false;begin perform public.list_my_app_inbox();exception when insufficient_privilege then denied:=true;end;assert denied;
+ denied:=false;begin update private.app_inbox_events set title_en='Changed'where event_id=e1;exception when object_not_in_prerequisite_state then denied:=true;end;assert denied;
+ denied:=false;begin delete from private.app_inbox_reads where event_id=e1;exception when object_not_in_prerequisite_state then denied:=true;end;assert denied;
+ raise notice 'PASS private inbox focused rollback fixture';
+end$$;
+rollback;

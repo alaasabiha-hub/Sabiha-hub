@@ -1,0 +1,34 @@
+begin;
+do $$
+declare own uuid;sid uuid;emp uuid;customer uuid;b uuid;oid uuid:=gen_random_uuid();iid text:='QA-INSIGHT-'||gen_random_uuid();v jsonb;reject boolean;expected numeric;n bigint;d date:=(now() at time zone 'Africa/Cairo')::date-1;
+begin
+ select user_id into strict own from public.staff_profiles where role='owner' and is_active limit 1;
+ select user_id into strict emp from public.staff_profiles where role='employee' and is_active limit 1;
+ select c.id into strict customer from public.customers c where not exists(select 1 from public.staff_profiles s where s.user_id=c.id) limit 1;
+ select branch_id into strict b from public.business_branches where is_default and is_active;
+ insert into public.business_orders(order_id,order_number,branch_id,service_name,order_type) values(oid,'QA-'||oid,b,'Evidence fixture','service');
+ insert into public.business_invoices(invoice_id,order_id,branch_id,service_name,total,issued_at) values(iid,oid,b,'Evidence fixture',47.25,d::timestamp at time zone 'Africa/Cairo');
+ insert into public.business_catalog_items(branch_id,item_type,name,price,stock_quantity) values(b,'product','Evidence QA '||oid,0,0);
+ select id into strict sid from auth.sessions where user_id=own and(not_after is null or not_after>clock_timestamp())order by created_at desc limit 1;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',own,'role','authenticated','session_id',sid)::text,true);
+ perform set_config('request.jwt.claim.sub',own::text,true);execute 'set local role authenticated';
+ v:=public.get_owner_business_insights(d,d);
+ assert v->>'analysis_mode'='evidence_rules';assert v->>'scope'='active_default_branch';
+ assert v->'actual_profit'='null'::jsonb and v->'forecast'='null'::jsonb and v->'marketing_attribution'='null'::jsonb;
+ assert jsonb_array_length(v->'metrics')=9;
+ assert not(v::text like '%full_name%' or v::text like '%phone%' or v::text like '%customer_id%' or v::text like '%employee_id%'),'PII leaked';
+ execute 'reset role';
+ select coalesce(sum(total),0),count(*) into expected,n from public.business_invoices where branch_id=b and status='active' and issued_at>=d::timestamp at time zone 'Africa/Cairo' and issued_at<(d+1)::timestamp at time zone 'Africa/Cairo';
+ assert (select (m->>'value')::numeric=expected and (m->>'count')::bigint=n from jsonb_array_elements(v->'metrics')m where m->>'code'='billed_revenue'),'Wrong billed aggregation';
+ select count(*) into n from public.business_catalog_items where branch_id=b and item_type='product' and is_active and stock_quantity=0;
+ assert (select (m->>'value')::bigint=n and m->>'basis'='current_snapshot' from jsonb_array_elements(v->'metrics')m where m->>'code'='out_of_stock_products'),'Wrong stock scope';
+ perform set_config('request.jwt.claim.sub',emp::text,true);execute 'set local role authenticated';
+ reject:=false;begin perform public.get_owner_business_insights(d,d);exception when insufficient_privilege then reject:=true;end;assert reject,'Employee read owner insights';
+ perform set_config('request.jwt.claim.sub',customer::text,true);
+ reject:=false;begin perform public.get_owner_business_insights(d,d);exception when insufficient_privilege then reject:=true;end;assert reject,'Customer read owner insights';
+ execute 'set local role anon';reject:=false;begin perform public.get_owner_business_insights(d,d);exception when insufficient_privilege then reject:=true;end;assert reject,'Anonymous execute allowed';
+ execute 'set local role authenticated';perform set_config('request.jwt.claim.sub',own::text,true);
+ reject:=false;begin perform public.get_owner_business_insights(d,d-1);exception when invalid_parameter_value then reject:=true;end;assert reject,'Invalid period accepted';
+ raise notice 'PASS owner aggregate evidence, provenance, no PII/profit/forecast, staff/customer/anon denial';
+end;$$;
+rollback;

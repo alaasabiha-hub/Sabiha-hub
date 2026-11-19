@@ -1,0 +1,43 @@
+begin;
+do $$
+<<qa>>
+declare c uuid;other uuid;req uuid:=gen_random_uuid();br uuid:=gen_random_uuid();product uuid:=gen_random_uuid();payload jsonb;x jsonb;y jsonb;rejected boolean;
+begin
+ select id into strict c from public.customers where not exists(select 1 from public.staff_profiles s where s.user_id=customers.id) limit 1;
+ select id into strict other from public.customers where id<>c and not exists(select 1 from public.staff_profiles s where s.user_id=customers.id) limit 1;
+ insert into public.business_branches(branch_id,name_ar,name_en) values(br,'اختبار استعادة الطلب','Retry QA');
+ insert into public.business_catalog_items(item_id,branch_id,name,item_type,price,stock_quantity,is_active,is_public) values(product,br,'Retry QA','product',12,10,true,true);
+ payload:=jsonb_build_object('p_items',jsonb_build_array(jsonb_build_object('item_id',product,'quantity',2)),'p_request_id',req,'p_method','pickup','p_zone',null,'p_address',null,'p_phone',null,'p_note','QA private note','p_coupon',null,'p_expected_total',24);
+ assert not has_table_privilege('authenticated','private.customer_checkout_retries','SELECT');
+ assert not has_table_privilege('service_role','private.customer_checkout_retries','SELECT');
+ execute 'set local role anon';rejected:=false;begin perform public.get_checkout_retry(req);exception when insufficient_privilege then rejected:=true;end;assert rejected;
+ execute 'set local role authenticated';perform set_config('request.jwt.claim.sub',c::text,true);
+ assert public.get_checkout_retry(req)->>'state'='absent';
+ x:=public.prepare_checkout_retry(req,payload);assert x->>'state'='open';
+ assert public.prepare_checkout_retry(req,payload)=x,'Prep retry changed payload';
+ rejected:=false;begin perform public.prepare_checkout_retry(gen_random_uuid(),jsonb_set(payload,'{p_request_id}',to_jsonb('00000000-0000-4000-8000-000000000099'::text)));exception when invalid_parameter_value then rejected:=true;end;assert rejected;
+ rejected:=false;begin perform public.prepare_checkout_retry('00000000-0000-4000-8000-000000000099',jsonb_set(payload,'{p_request_id}',to_jsonb('00000000-0000-4000-8000-000000000099'::text)));exception when object_not_in_prerequisite_state then rejected:=true;end;assert rejected,'Second device may not start a second unresolved checkout';
+ rejected:=false;begin perform public.prepare_checkout_retry(req,payload||'{"p_note":"changed"}');exception when invalid_parameter_value then rejected:=true;end;assert rejected;
+ perform set_config('request.jwt.claim.sub',other::text,true);rejected:=false;begin perform public.get_checkout_retry(req);exception when insufficient_privilege then rejected:=true;end;assert rejected;
+ rejected:=false;begin perform public.reject_checkout_retry(req);exception when insufficient_privilege then rejected:=true;end;assert rejected;
+ perform set_config('request.jwt.claim.sub',c::text,true);
+ x:=public.get_checkout_retry(null);assert x->'payload'=payload,'Restart restore lost exact private payload';
+ x:=public.place_product_fulfillment(payload->'p_items',req,'pickup',null,null,null,'QA private note',null,24);
+ y:=public.get_checkout_retry(req);assert y->>'state'='succeeded' and y->'order'->>'order_id'=x->>'order_id';
+ assert (y->'order'->>'total')::numeric=24,'Recovered canonical fulfillment total is missing before invoice creation';
+ assert public.get_checkout_retry(null)->>'request_id'=req::text;
+ assert public.get_checkout_retry(null)->>'request_id'=req::text,'Lost new-device discovery response must remain discoverable';
+ assert public.reject_checkout_retry(req)->>'state'='succeeded','Cannot claim committed checkout rejected';
+ y:=public.place_product_fulfillment(payload->'p_items',req,'pickup',null,null,null,'QA private note',null,24);assert y=x,'Restart retry duplicated order';
+ assert public.acknowledge_checkout_retry(req)->>'acknowledged'='true';
+ assert public.acknowledge_checkout_retry(req)->>'acknowledged'='true','Acknowledgment must be idempotent';
+ assert public.get_checkout_retry(null)->>'state'='absent';
+ execute 'reset role';assert (select stock_quantity=8 from public.business_catalog_items where item_id=product);assert (select count(*)=1 from public.business_orders where customer_id=c and customer_request_id=req);
+ assert (select state='succeeded' and d.payload=qa.payload and resolved_at is not null from private.customer_checkout_retries d where request_id=req),'Preserved draft audit missing';
+ perform set_config('request.jwt.claim.sub',c::text,true);execute 'set local role authenticated';req:=gen_random_uuid();payload:=jsonb_set(payload,'{p_request_id}',to_jsonb(req));perform public.prepare_checkout_retry(req,payload);assert public.reject_checkout_retry(req)->>'state'='rejected';
+ rejected:=false;begin perform public.place_product_fulfillment(payload->'p_items',req,'pickup',null,null,null,'QA private note',null,24);exception when object_not_in_prerequisite_state then rejected:=true;end;assert rejected,'Reject-first must block a delayed placement with the same request';
+ execute 'reset role';assert not exists(select 1 from public.business_orders where customer_id=c and customer_request_id=req);assert exists(select 1 from private.customer_checkout_retries d where request_id=req and state='rejected' and d.payload=qa.payload);
+ raise notice 'PASS both lock-serialized schedules: reject-first blocks late place; place-first wins over reject; lost success discovery and explicit ack';
+ raise notice 'PASS private grants, anonymous/cross-customer denial, exact prepare/restart, committed order recovery, no duplicate stock, retained resolved audit';
+end;$$;
+rollback;

@@ -1,0 +1,67 @@
+-- All fixture rows and edits are transaction-local and rolled back.
+begin;
+set local timezone='UTC';
+do $$
+declare own uuid;emp uuid;other uuid;order_id uuid:=gen_random_uuid();invoice text:='QA-HR-'||gen_random_uuid();req uuid:=gen_random_uuid();shift_id uuid;leave_id uuid;
+ payload jsonb;approved_payload jsonb;v jsonb;v2 jsonb;rejected boolean;d date:=current_date-10;
+begin
+ select user_id into strict own from public.staff_profiles where role='owner' and is_active limit 1;
+ select user_id into strict emp from public.staff_profiles where role='employee' and is_active limit 1;
+ select c.id into strict other from public.customers c where not exists(select 1 from public.staff_profiles sp where sp.user_id=c.id) limit 1;
+ -- Fixtures use existing accounts but never change their persisted HR or business records.
+ insert into private.hr_attendance(staff_id,clock_in,clock_out,request_id) values(emp,d::timestamptz+interval '8 hours',d::timestamptz+interval '12 hours',gen_random_uuid());
+ insert into public.business_orders(order_id,order_number,service_name,assigned_staff_ids,status,order_type) values(order_id,'QA-HR-'||order_id,'HR commission fixture',array[emp,own], 'completed','service');
+ insert into public.business_invoices(invoice_id,order_id,service_name,total,discount,status,issued_at) values(invoice,order_id,'HR commission fixture',80,20,'active',d::timestamptz+interval '10 hours');
+ perform set_config('request.jwt.claim.sub',emp::text,true);execute 'set local role authenticated';
+ rejected:=false;begin perform public.hr_action('read',jsonb_build_object('staff_id',own));exception when insufficient_privilege then rejected:=true;end;assert rejected,'Employee read another staff';
+ rejected:=false;begin perform public.hr_action('employment',jsonb_build_object('salary',1000,'commission_percent',10,'currency','EGP','starts_on',d,'request_id',gen_random_uuid()));exception when insufficient_privilege then rejected:=true;end;assert rejected,'Employee changed salary';
+ rejected:=false;begin perform private.hr_execute('read','{}');exception when insufficient_privilege then rejected:=true;end;assert rejected,'Inner definer was callable';
+ rejected:=false;begin perform 1 from private.hr_payroll;exception when insufficient_privilege then rejected:=true;end;assert rejected,'Raw payroll table exposed';
+ payload:=jsonb_build_object('request_id',req);
+ v:=public.hr_action('clock_in',payload);v2:=public.hr_action('clock_in',payload);assert v=v2,'Clock-in replay differed';shift_id:=(v->>'id')::uuid;
+ rejected:=false;begin perform public.hr_action('clock_in',jsonb_build_object('request_id',gen_random_uuid()));exception when unique_violation then rejected:=true;end;assert rejected,'Two simultaneous open shifts';
+ perform public.hr_action('clock_out',jsonb_build_object('request_id',gen_random_uuid(),'id',shift_id));
+ rejected:=false;begin perform public.hr_action('leave',payload);exception when raise_exception then rejected:=true;end;assert rejected,'Request id reused across actions';
+ v:=public.hr_action('leave',jsonb_build_object('request_id',gen_random_uuid(),'from_date',current_date+5,'to_date',current_date+6,'reason','QA request'));leave_id:=(v->>'id')::uuid;
+ rejected:=false;begin perform public.hr_action('decide_leave',jsonb_build_object('request_id',gen_random_uuid(),'id',leave_id,'status','approved'));exception when insufficient_privilege then rejected:=true;end;assert rejected,'Employee approved own leave';
+ perform set_config('request.jwt.claim.sub',own::text,true);
+ payload:=jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'from_date',d,'to_date',d,'scheduled_minutes',480);
+ rejected:=false;begin perform public.hr_action('approve_payroll',payload);exception when raise_exception then rejected:=true;end;assert rejected,'Missing employment accepted';
+ rejected:=false;begin perform public.hr_action('employment',jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'salary',1000,'commission_percent',10,'currency','AED','starts_on',d));exception when check_violation then rejected:=true;end;assert rejected,'Non-EGP compensation accepted';
+ perform public.hr_action('employment',jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'salary',1000,'commission_percent',10,'currency','EGP','starts_on',d));
+ perform public.hr_action('decide_leave',jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'id',leave_id,'status','approved'));
+ perform public.hr_action('adjustment',jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'on_date',d,'kind','bonus','amount',30,'reason','QA bonus'));
+ perform public.hr_action('adjustment',jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'on_date',d,'kind','advance','amount',10,'reason','QA advance'));
+ perform public.hr_action('adjustment',jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'on_date',d,'kind','deduction','amount',5,'reason','QA deduction'));
+ approved_payload:=payload;
+ v:=public.hr_action('approve_payroll',payload);v2:=public.hr_action('approve_payroll',payload);assert v=v2,'Payroll retry duplicated snapshot';
+ assert (v#>>'{snapshot,base_earned}')::numeric=500,'Attendance prorating wrong';
+ assert (v#>>'{snapshot,commission}')::numeric=5,'Before-discount shared commission wrong';
+ assert (v#>>'{snapshot,net}')::numeric=520,'Adjustment ledger net wrong';
+ assert jsonb_array_length(v#>'{snapshot,commission_lines}')=1,'Invoice repeated';
+ assert v#>>'{snapshot,payment_status}'='not_transferred','Salary incorrectly paid';
+ payload:=jsonb_set(payload,'{request_id}',to_jsonb(gen_random_uuid()));
+ rejected:=false;begin perform public.hr_action('approve_payroll',payload);exception when raise_exception then rejected:=true;end;assert rejected,'Overlapping payroll accepted';
+ rejected:=false;begin perform public.hr_action('adjustment',jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'on_date',d,'kind','bonus','amount',1,'reason','late'));exception when raise_exception then rejected:=true;end;assert rejected,'Closed period altered';
+ perform public.hr_action('employment',jsonb_build_object('staff_id',emp,'request_id',gen_random_uuid(),'salary',2000,'commission_percent',20,'currency','EGP','starts_on',d));
+ assert (public.hr_action('read',jsonb_build_object('staff_id',emp))#>>'{payroll,0,snapshot,net}')::numeric=520,'Approved snapshot changed with config';
+ execute 'reset role';
+ -- A duplicate association outside the selected invoice date must still be rejected.
+ insert into public.business_invoices(invoice_id,order_id,service_name,total,discount,status,issued_at) values(invoice||'-DUP',order_id,'Duplicate fixture',80,20,'active',(d+1)::timestamptz);
+ rejected:=false;begin update private.hr_payroll set snapshot='{}' where staff_id=emp;exception when raise_exception then rejected:=true;end;assert rejected,'Direct approved snapshot mutation allowed';
+ payload:=jsonb_set(jsonb_set(payload,'{from_date}',to_jsonb(d+1)),'{to_date}',to_jsonb(d+1));
+ perform set_config('request.jwt.claim.sub',own::text,true);execute 'set local role authenticated';
+ rejected:=false;begin perform public.hr_action('approve_payroll',jsonb_set(payload,'{request_id}',to_jsonb(gen_random_uuid())));exception when raise_exception then rejected:=true;end;assert rejected,'Duplicate invoice counted across periods';
+ perform set_config('request.jwt.claim.sub',other::text,true);
+ rejected:=false;begin perform public.hr_action('read','{}');exception when insufficient_privilege then rejected:=true;end;assert rejected,'Customer reached HR';
+ execute 'set local role anon';rejected:=false;begin perform public.hr_action('read','{}');exception when insufficient_privilege then rejected:=true;end;assert rejected,'Anonymous HR access';
+ execute 'reset role';
+ update public.staff_profiles set is_active=false where user_id=emp;
+ perform set_config('request.jwt.claim.sub',emp::text,true);execute 'set local role authenticated';
+ rejected:=false;begin perform public.hr_action('read','{}');exception when insufficient_privilege then rejected:=true;end;assert rejected,'Deactivated staff retained HR access';
+ execute 'reset role';update public.staff_profiles set role='employee' where user_id=own;
+ perform set_config('request.jwt.claim.sub',own::text,true);execute 'set local role authenticated';
+ rejected:=false;begin perform public.hr_action('approve_payroll',approved_payload);exception when insufficient_privilege then rejected:=true;end;assert rejected,'Downgraded owner replayed privileged request';
+ raise notice 'PASS HR authorization, attendance, leave, compensation, adjustments, immutable idempotent payroll and commissions';
+end $$;
+rollback;

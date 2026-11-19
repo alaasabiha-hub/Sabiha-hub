@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light">
+  <title>Sabiha Hub | استعادة كلمة المرور</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+  <script src="recovery.js" defer></script>
+</head>
+<body>
+  <main>
+    <div class="language-row"><button id="language" type="button">English</button></div>
+    <div class="brand-mark" aria-label="Sabiha Hub">SH</div>
+    <h1 id="title">استعادة كلمة المرور</h1>
+    <p id="intro">أدخل بريد حسابك. سنرسل رابطًا آمنًا صالحًا لمرة واحدة لإعادة تعيين كلمة المرور.</p>
+
+    <section id="request-panel">
+      <form id="request-form" novalidate>
+        <label id="email-label" for="email">البريد الإلكتروني</label>
+        <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" required>
+        <button id="request-button" type="submit">إرسال رابط الاستعادة</button>
+      </form>
+    </section>
+
+    <section id="password-panel" hidden>
+      <p id="password-intro">اختر كلمة مرور جديدة لحسابك.</p>
+      <form id="password-form" novalidate>
+        <label id="password-label" for="password">كلمة المرور الجديدة</label>
+        <input id="password" type="password" autocomplete="new-password" minlength="8" required>
+        <label id="confirm-label" for="confirm">تأكيد كلمة المرور</label>
+        <input id="confirm" type="password" autocomplete="new-password" minlength="8" required>
+        <button id="save-button" type="submit">حفظ كلمة المرور</button>
+      </form>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+    <footer id="footer">لن نطلب كلمة مرورك عبر البريد أو الدعم. رابط الاستعادة لمرة واحدة.</footer>
+  </main>
+</body>
+</html>

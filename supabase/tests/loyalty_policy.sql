@@ -1,0 +1,58 @@
+-- Foundation only: no earnings or redemption; fixtures roll back.
+begin;
+do $$
+<<qa>>
+declare own uuid;emp uuid;customer uuid;branch uuid:=gen_random_uuid();service uuid:=gen_random_uuid();product uuid:=gen_random_uuid();offer uuid:=gen_random_uuid();foreign_offer uuid:=gen_random_uuid();foreign_branch uuid:=gen_random_uuid();withdrawn_booking uuid:=gen_random_uuid();before_booking uuid:=gen_random_uuid();eligible_booking uuid:=gen_random_uuid();disabled_booking uuid:=gen_random_uuid();request uuid:=gen_random_uuid();v jsonb;repeated jsonb;denied boolean;legacy_count bigint;invoice_hash text;
+begin
+ select user_id into strict own from public.staff_profiles where role='owner' and is_active limit 1;
+ select user_id into strict emp from public.staff_profiles where role='employee' and is_active limit 1;
+ select c.id into strict customer from public.customers c where not exists(select 1 from public.staff_profiles s where s.user_id=c.id) limit 1;
+ insert into public.business_branches(branch_id,name_ar,name_en) values(branch,'سياسة اختبار معزولة','Isolated policy QA');
+ insert into public.business_catalog_items(item_id,item_type,name,category,price,is_active,is_public,branch_id) values(service,'service','Actual QA service','QA',100,true,true,branch),(product,'product','QA product','QA',10,true,true,branch);
+ insert into public.business_offers(offer_id,branch_id,name,offer_type,visits_required,is_active,is_public) values(offer,branch,'Actual QA visit offer','visit_reward',3,true,true);
+ insert into public.business_branches(branch_id,name_ar,name_en) values(foreign_branch,'فرع آخر معزول','Other isolated branch');
+ insert into public.business_offers(offer_id,branch_id,name,offer_type,visits_required,is_active,is_public) values(foreign_offer,foreign_branch,'Foreign branch QA visit offer','visit_reward',3,true,true);
+ select count(*) into legacy_count from public.business_loyalty_transactions;
+ select md5(coalesce(string_agg(row_to_json(i)::text,'' order by invoice_id),'')) into invoice_hash from public.business_invoices i;
+ insert into public.bookings(id,customer_id,service_name,booking_date,booking_time,catalog_item_id,branch_id) values(before_booking,customer,'Actual QA service',current_date+7,'10:00',service,branch);
+ assert not exists(select 1 from private.booking_loyalty_policy_snapshots where booking_id=before_booking),'Absent policy must remain disabled';
+ perform set_config('request.jwt.claim.sub',customer::text,true);perform set_config('request.jwt.claims',jsonb_build_object('sub',customer,'role','authenticated','user_metadata',jsonb_build_object('role','owner'))::text,true);execute 'set local role authenticated';
+ denied:=false;begin perform public.get_loyalty_policy(branch);exception when insufficient_privilege then denied:=true;end;assert denied,'Customer read owner policy';
+ denied:=false;begin perform public.save_loyalty_policy(request,branch,offer,array[service],true);exception when insufficient_privilege then denied:=true;end;assert denied,'Customer enabled policy';
+ perform set_config('request.jwt.claim.sub',emp::text,true);
+ denied:=false;begin perform public.get_loyalty_policy(branch);exception when insufficient_privilege then denied:=true;end;assert denied,'Employee read owner policy';
+ perform set_config('request.jwt.claim.sub',own::text,true);
+ assert public.get_loyalty_policy(branch)->'current'='null'::jsonb,'Unexpected default policy';
+ assert not exists(select 1 from jsonb_array_elements(public.get_loyalty_policy(branch)->'offers') x where x->>'id'=foreign_offer::text),'Foreign branch offer appeared in context';
+ denied:=false;begin perform public.save_loyalty_policy(request,branch,foreign_offer,array[service],true);exception when raise_exception then denied:=true;end;assert denied,'Foreign branch offer accepted';
+ denied:=false;begin perform public.save_loyalty_policy(request,branch,offer,array[product],true);exception when raise_exception then denied:=true;end;assert denied,'Product counted as service';
+ denied:=false;begin perform public.save_loyalty_policy(request,branch,offer,array[service,service],true);exception when raise_exception then denied:=true;end;assert denied,'Duplicate service selection accepted';
+ v:=public.save_loyalty_policy(request,branch,offer,array[service],true);repeated:=public.save_loyalty_policy(request,branch,offer,array[service],true);assert v=repeated,'Policy retry created another version';
+ assert v#>>'{policy_snapshot,eligibility_basis}'='booking_created_time';assert (v->'policy_snapshot') ?& array['offer_starts_at','offer_ends_at','reward_item_id','reward_value'];
+ assert v#>>'{policy_snapshot,unit}'='service_visits';assert v#>>'{policy_snapshot,automatic_earning_implemented}'='false';assert v#>>'{policy_snapshot,redemption_implemented}'='false';
+ denied:=false;begin perform public.save_loyalty_policy(request,branch,offer,array[service],false);exception when raise_exception then denied:=true;end;assert denied,'Request changed enabled state';
+ execute 'reset role';
+ assert not exists(select 1 from private.booking_loyalty_policy_snapshots where booking_id=before_booking),'Existing booking backfilled';
+ assert exists(select 1 from private.managed_visit_reward_offers where offer_id=offer and managed_by=own),'Adopted offer marker missing';
+ denied:=false;begin delete from private.managed_visit_reward_offers where offer_id=offer;exception when raise_exception then denied:=true;end;assert denied,'Managed offer marker was mutable';
+ insert into public.bookings(id,customer_id,service_name,booking_date,booking_time,catalog_item_id,branch_id) values(eligible_booking,customer,'Actual QA service',current_date+7,'11:00',service,branch);
+ assert exists(select 1 from private.booking_loyalty_policy_snapshots where booking_id=eligible_booking and policy_version_id=request),'Eligible future booking missing immutable version';
+ update public.business_offers set visits_required=4 where offer_id=offer;
+ assert (select policy_snapshot->>'threshold_visits' from private.booking_loyalty_policy_snapshots where booking_id=eligible_booking)='3','Offer edit changed existing snapshot';
+ update public.business_offers set is_active=false,is_public=false where offer_id=offer;
+ insert into public.bookings(id,customer_id,service_name,booking_date,booking_time,catalog_item_id,branch_id) values(withdrawn_booking,customer,'Actual QA service',current_date+7,'11:30',service,branch);
+ assert not exists(select 1 from private.booking_loyalty_policy_snapshots where booking_id=withdrawn_booking),'Withdrawn offer captured future booking';
+ assert exists(select 1 from private.booking_loyalty_policy_snapshots where booking_id=eligible_booking and policy_version_id=request),'Withdrawal removed old immutable snapshot';
+ denied:=false;begin update private.loyalty_policy_versions set enabled=false where version_id=request;exception when raise_exception then denied:=true;end;assert denied,'Version mutation accepted';
+ denied:=false;begin update private.booking_loyalty_policy_snapshots set policy_snapshot='{}' where booking_id=eligible_booking;exception when raise_exception then denied:=true;end;assert denied,'Booking snapshot mutation accepted';
+ execute 'set local role authenticated';perform public.save_loyalty_policy(gen_random_uuid(),branch,offer,array[service],false);execute 'reset role';
+ insert into public.bookings(id,customer_id,service_name,booking_date,booking_time,catalog_item_id,branch_id) values(disabled_booking,customer,'Actual QA service',current_date+7,'12:00',service,branch);
+ assert not exists(select 1 from private.booking_loyalty_policy_snapshots where booking_id=disabled_booking),'Disabled policy captured booking';
+ assert (select count(*) from public.business_loyalty_transactions)=legacy_count,'Foundation created fake loyalty points';
+ assert (select md5(coalesce(string_agg(row_to_json(i)::text,'' order by invoice_id),'')) from public.business_invoices i)=invoice_hash,'Foundation changed invoices';
+ execute 'set local role anon';denied:=false;begin perform public.get_loyalty_policy(branch);exception when insufficient_privilege then denied:=true;end;assert denied,'Anonymous owner policy access';
+ execute 'reset role';update public.staff_profiles set is_active=false where user_id=own;execute 'set local role authenticated';
+ denied:=false;begin perform public.save_loyalty_policy(request,branch,offer,array[service],true);exception when insufficient_privilege then denied:=true;end;assert denied,'Inactive owner replay succeeded';
+ raise notice 'PASS owner-only versioned actual-service policy, no absent defaults, future-only immutable snapshots, idempotency, no earnings/redemption/invoice changes';
+end $$;
+rollback;
